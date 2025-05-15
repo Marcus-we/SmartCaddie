@@ -128,17 +128,20 @@ def query_agent(
         
         # Add instructions as a regular string (not f-string)
         formatted_query += "### Instructions (follow these strictly):\n"
-        formatted_query += "0. Address the user directly as if youre talking to them.\n"
-        formatted_query += "1. Gather info about the users clubs.\n"
-        formatted_query += "2. Analyze how the wind affects the shot.\n"
-        formatted_query += "3. Calculate and provide the effective distance after considering the wind.\n"
-        formatted_query += f"4. Consider the ground conditions: {ground_conditions_text}\n"
+        formatted_query += "1. Address the user directly as if youre talking to them.\n"
+        formatted_query += "2. Gather info about the users clubs.\n"
+        formatted_query += "3. Analyze how the wind affects the shot.\n"
+        formatted_query += f"4. Calculate the effective distance after considering the wind and ground conditions: {ground_conditions_text}.\n"
+
+        formatted_query += "5. IMPORTANT: Follow this format for your answer\n"
+        formatted_query += "5. First explain what the conditions will do to the ball\n"
+        formatted_query += "5. Recommend **exactly two** different club options.\n"
+        formatted_query += "6. For each option, provide in simple, clear language:\n"
+        formatted_query += "   - Club name and normal distance (example: '8 iron - normally 130 meters')\n"
+        formatted_query += "   - One short sentence about why this club works for this situation\n"
         
-        formatted_query += "5. Recommend **exactly two** different shot options.\n"
-        formatted_query += "6. For each option, include:\n"
-        formatted_query += "   - The expected distance\n"
-        formatted_query += "   - How the shot accounts for wind conditions and ground conditions\n"
-        formatted_query += "7. Begin your response with the phrase:\n"
+        formatted_query += "7. Keep your explanation brief and direct - avoid complex calculations in your answer.\n"
+        formatted_query += "8. Begin your response with the phrase:\n"
         formatted_query += "   **Final Answer: [your complete recommendation here]**\n\n"
 
         formatted_query += "### Note:\n"

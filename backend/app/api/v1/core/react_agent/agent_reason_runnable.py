@@ -1,4 +1,3 @@
-
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import tool, create_react_agent
 import datetime
@@ -238,43 +237,43 @@ def calculate_lie_effect(input: dict):
             active_conditions.append(slope_condition)
             descriptions.append(slope_effect["description"])
     
-    # Calculate adjusted distance
-    adjusted_distance = base_distance * net_distance_factor
     
     # Calculate the club distance needed to reach the target
     required_club_distance = base_distance / net_distance_factor if net_distance_factor > 0 else base_distance
     
-    # Build combined description
-    if len(descriptions) > 1:
-        combined_description = "Combined effects: " + "; ".join(descriptions)
-    else:
-        combined_description = descriptions[0] if descriptions else "Standard lie"
     
     # Format the active conditions for display
     formatted_conditions = [condition.replace('_', ' ') for condition in active_conditions]
     condition_str = " + ".join(formatted_conditions)
     
+    # Create a dictionary mapping each active condition to its description
+    condition_descriptions = {}
+    for i, condition in enumerate(active_conditions):
+        readable_condition = condition.replace('_', ' ')
+        condition_descriptions[readable_condition] = descriptions[i]
+    
     return {
         "target_distance_meters": base_distance,  # Original target distance
         "required_club_distance_meters": round(required_club_distance, 1),  # How far your club should normally hit
+        "description": " ".join(descriptions),  # Combined descriptions of all active conditions
+        "active_conditions": formatted_conditions,  # List of active conditions in human-readable form
+        "condition_descriptions": condition_descriptions,  # Map each condition to its description
         "explanation": f"To reach your {base_distance} meter target from this {condition_str} lie, select a club that normally carries {round(required_club_distance, 1)} meters."
     }
 
 @tool
-def calculate_ground_effect(input: dict):
+def calculate_ground_effect(ground_condition: str, base_distance: float):
     """Calculate how ground conditions (wet or firm) affect golf shots.
     
     Args:
-        input: A dictionary containing:
-            ground_condition: String, either 'wet', 'firm', or 'normal'
-            base_distance: Base/normal distance in meters for the shot
+        ground_condition: String, either 'wet', 'firm', or 'normal'
+        base_distance: Base/normal distance in meters for the shot
         
     Returns:
         Information about how the ground condition affects the shot
     """
-    # Extract parameters
-    ground_condition = input.get('ground_condition', '').lower()
-    base_distance = input.get('base_distance', 0)
+    # Convert to lowercase and validate
+    ground_condition = ground_condition.lower()
     
     # Validate base distance
     if not base_distance or not isinstance(base_distance, (int, float)) or base_distance <= 0:
