@@ -55,6 +55,7 @@ logs/
 # Database
 *.sqlite3
 *.db
+chroma_db
 
 # Node (if using any frontend)
 node_modules/
@@ -79,3 +80,4 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
+.gitignore
