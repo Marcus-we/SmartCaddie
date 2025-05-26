@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { Link } from 'expo-router'
 import authStore from '../../store/authStore'
+import { API_BASE_URL } from '../../config/api'
 
 const AddClubModal = ({ 
     visible, 
@@ -247,7 +248,7 @@ export default function MyClubs() {
             setLoading(true)
             setError(null)
             
-            const response = await fetch('http://192.168.0.129:8000/v1/clubs', {
+            const response = await fetch(`${API_BASE_URL}/clubs`, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -293,7 +294,7 @@ export default function MyClubs() {
                 preferred_club: club.preferred_club
             }))
 
-            const response = await fetch('http://192.168.0.129:8000/v1/clubs', {
+            const response = await fetch(`${API_BASE_URL}/clubs`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -348,7 +349,7 @@ export default function MyClubs() {
                 preferred_club: editingClub.preferred_club
             }
 
-            const response = await fetch(`http://192.168.0.129:8000/v1/clubs/${encodeURIComponent(originalClubName)}`, {
+            const response = await fetch(`${API_BASE_URL}/clubs/${encodeURIComponent(originalClubName)}`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -383,7 +384,7 @@ export default function MyClubs() {
         try {
             setDeletingClub(clubName)
             
-            const response = await fetch(`http://192.168.0.129:8000/v1/clubs/${encodeURIComponent(clubName)}`, {
+            const response = await fetch(`${API_BASE_URL}/clubs/${encodeURIComponent(clubName)}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,

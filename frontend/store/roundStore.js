@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import authStore from './authStore'
-
-const API_BASE_URL = 'http://192.168.0.129:8000/v1'
+import { API_BASE_URL } from '../config/api'
 
 const useRoundStore = create((set, get) => ({
   // Current round state

@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { API_BASE_URL } from '../config/api';
 
-const API_URL = 'http://192.168.0.129:8000/v1'; // Local network IP
+const API_URL = API_BASE_URL; // Use centralized API URL
 
 const loadInitialState = async () => {
   try {

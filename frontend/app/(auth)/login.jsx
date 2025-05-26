@@ -3,9 +3,9 @@ import { Text, View, TextInput, TouchableOpacity, Alert, TouchableWithoutFeedbac
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Link, useRouter } from 'expo-router'
 import authStore from '../../store/authStore'
+import { API_BASE_URL } from '../../config/api'
 
-
-const API_URL = 'http://192.168.0.129:8000/v1'; // Local network IP
+const API_URL = API_BASE_URL; // Use centralized API URL
 
 export default function Login() {
     const [email, setEmail] = useState('')

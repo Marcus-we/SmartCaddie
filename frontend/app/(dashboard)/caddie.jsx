@@ -7,6 +7,7 @@ import * as Location from 'expo-location'
 import { router } from 'expo-router'
 import authStore from '../../store/authStore'
 import useRoundStore from '../../store/roundStore'
+import { API_BASE_URL } from '../../config/api'
 
 const { width, height } = Dimensions.get('window')
 
@@ -32,6 +33,7 @@ export default function SmartCaddie() {
     const [targetPosition, setTargetPosition] = useState(null)
     const [distance, setDistance] = useState(0)
     const [mapRegion, setMapRegion] = useState(null)
+    const [mapType, setMapType] = useState('satellite') // 'satellite' or 'standard'
     
     // Weather State
     const [weather, setWeather] = useState(null)
@@ -174,6 +176,10 @@ export default function SmartCaddie() {
         } catch (error) {
             Alert.alert('Error', 'Failed to update par: ' + error.message)
         }
+    }
+
+    const toggleMapType = () => {
+        setMapType(prev => prev === 'satellite' ? 'standard' : 'satellite')
     }
 
     const handleCompleteRound = async () => {
@@ -525,7 +531,7 @@ export default function SmartCaddie() {
                 ...shotConditions
             }
 
-            const response = await fetch('http://192.168.0.129:8000/v1/agent/query', {
+            const response = await fetch(`${API_BASE_URL}/agent/query`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -565,7 +571,7 @@ export default function SmartCaddie() {
                 ...(feedbackData.shot_result && { shot_result: feedbackData.shot_result })
             }
 
-            const response = await fetch('http://192.168.0.129:8000/v1/shots/feedback', {
+            const response = await fetch(`${API_BASE_URL}/shots/feedback`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -753,7 +759,7 @@ export default function SmartCaddie() {
                     onPress={handleMapPress}
                     showsUserLocation={false} // We'll use custom marker
                     showsMyLocationButton={false}
-                    mapType="satellite" // Good for golf courses
+                    mapType={mapType} // Toggle between satellite and standard
                 >
                     {/* Wind Direction Arrow */}
                     <WindArrow />
@@ -854,13 +860,27 @@ export default function SmartCaddie() {
                 )}
 
                 {/* Action Buttons */}
-                <View className="flex-row space-x-3">
+                <View className="flex-row space-x-2">
                     <TouchableOpacity 
                         onPress={getCurrentLocation}
                         className="flex-1 bg-gray-100 rounded-xl p-3 flex-row items-center justify-center"
                     >
                         <Ionicons name="locate" size={20} color="#059669" />
                         <Text className="text-green-900 font-semibold ml-2">Recenter</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        onPress={toggleMapType}
+                        className="flex-1 bg-gray-100 rounded-xl p-3 flex-row items-center justify-center"
+                    >
+                        <Ionicons 
+                            name={mapType === 'satellite' ? 'map' : 'earth'} 
+                            size={20} 
+                            color="#059669" 
+                        />
+                        <Text className="text-green-900 font-semibold ml-2">
+                            {mapType === 'satellite' ? 'Golf View' : 'Satellite'}
+                        </Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 

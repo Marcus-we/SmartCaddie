@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { Link, router } from 'expo-router'
 import authStore from '../../store/authStore'
+import { API_BASE_URL } from '../../config/api'
 
 export default function ChangePassword() {
     const { token } = authStore()
@@ -50,7 +51,7 @@ export default function ChangePassword() {
 
         setLoading(true)
         try {
-            const response = await fetch('http://192.168.0.129:8000/v1/change-password', {
+            const response = await fetch(`${API_BASE_URL}/change-password`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

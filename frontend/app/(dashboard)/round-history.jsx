@@ -267,11 +267,6 @@ export default function RoundHistory() {
                 ) : (
                     <>
 
-
-                        {/* Rounds List */}
-                        <Text className="text-lg font-bold text-gray-900 mb-4">
-                            Recent Rounds
-                        </Text>
                         
                         {roundHistory.map((round) => (
                             <RoundCard key={round.id} round={round} />
