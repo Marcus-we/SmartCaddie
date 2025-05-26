@@ -50,6 +50,10 @@ class Users(Base):
     clubs: Mapped[list["Clubs"]] = relationship(
         back_populates="user"
     )
+    
+    rounds: Mapped[list["Rounds"]] = relationship(
+        back_populates="user"
+    )
 
 
     @property
@@ -70,8 +74,68 @@ class Clubs(Base):
     user: Mapped["Users"] = relationship(
         back_populates="clubs"
     )
-    
 
+
+class Rounds(Base):
+    __tablename__ = "rounds"
     
+    # Basic round info
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    course_name: Mapped[str] = mapped_column(String(255))
+    
+    # Round configuration
+    total_holes: Mapped[int] = mapped_column(Integer)  # 9 or 18
+    
+    # Timing
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Scoring (calculated fields)
+    total_shots: Mapped[int] = mapped_column(Integer, nullable=True)
+    total_par: Mapped[int] = mapped_column(Integer, nullable=True)
+    score_relative_to_par: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Status
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    
+    # Additional data
+    weather_conditions: Mapped[str] = mapped_column(Text, nullable=True)  # JSON string
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user: Mapped["Users"] = relationship(back_populates="rounds")
+    hole_scores: Mapped[list["HoleScores"]] = relationship(
+        back_populates="round", 
+        cascade="all, delete-orphan",
+        order_by="HoleScores.hole_number"
+    )
+
+
+class HoleScores(Base):
+    __tablename__ = "hole_scores"
+    
+    round_id: Mapped[int] = mapped_column(ForeignKey("rounds.id", ondelete="CASCADE"))
+    hole_number: Mapped[int] = mapped_column(Integer)
+    
+    # Scoring
+    par: Mapped[int] = mapped_column(Integer)
+    shots: Mapped[int] = mapped_column(Integer, default=0)
+    score_relative_to_par: Mapped[int] = mapped_column(Integer)  # shots - par
+    
+    # Timing
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Optional details
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Relationships
+    round: Mapped["Rounds"] = relationship(back_populates="hole_scores")
+    
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('round_id', 'hole_number', name='unique_round_hole'),
+    )
 
     

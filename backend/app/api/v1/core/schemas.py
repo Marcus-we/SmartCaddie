@@ -59,3 +59,67 @@ class UpdateClubSchema(BaseModel):
 class AddMultipleClubsSchema(BaseModel):
     clubs: List[ClubSchema]
     model_config = ConfigDict(from_attributes=True)
+
+
+# Round tracking schemas
+class HoleConfigSchema(BaseModel):
+    hole_number: int = Field(..., ge=1, le=18)
+    par: int = Field(..., ge=3, le=5)
+
+class StartRoundSchema(BaseModel):
+    course_name: str = Field(..., min_length=1, max_length=255)
+    total_holes: int = Field(..., ge=9, le=18)
+    holes_config: List[HoleConfigSchema]
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class UpdateHoleScoreSchema(BaseModel):
+    shots: int = Field(..., ge=0)
+    par: int = Field(..., ge=3, le=5)
+    notes: str | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CompleteRoundSchema(BaseModel):
+    notes: str | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class HoleScoreOutSchema(BaseModel):
+    id: int
+    hole_number: int
+    par: int
+    shots: int
+    score_relative_to_par: int
+    completed_at: datetime | None
+    notes: str | None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class RoundOutSchema(BaseModel):
+    id: int
+    course_name: str
+    total_holes: int
+    start_time: datetime
+    end_time: datetime | None
+    total_shots: int | None
+    total_par: int | None
+    score_relative_to_par: int | None
+    is_completed: bool
+    notes: str | None
+    hole_scores: List[HoleScoreOutSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class RoundSummarySchema(BaseModel):
+    id: int
+    course_name: str
+    total_holes: int
+    start_time: datetime
+    end_time: datetime | None
+    total_shots: int | None
+    total_par: int | None
+    score_relative_to_par: int | None
+    is_completed: bool
+    
+    model_config = ConfigDict(from_attributes=True)

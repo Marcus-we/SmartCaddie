@@ -82,8 +82,12 @@ def get_user_clubs_db(user_id: int, db: Session):
     if not user:
         return None
     
-    # Get all clubs for the user
-    clubs = db.scalars(select(Clubs).where(Clubs.user_id == user_id)).all()
+    # Get all clubs for the user, sorted by distance (longest first)
+    clubs = db.scalars(
+        select(Clubs)
+        .where(Clubs.user_id == user_id)
+        .order_by(Clubs.distance_meter.desc())
+    ).all()
     
     return clubs
 
