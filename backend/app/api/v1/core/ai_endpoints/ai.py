@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field
 from app.security import get_current_user
 from app.api.v1.core.react_agent.react_graph import app as agent_app
 
+from app.api.v1.core.schemas import (
+    AgentQueryRequest,
+    ShotFeedbackRequest
+)
+
 from app.api.v1.core.models import (
     Users,
 )
@@ -30,37 +35,168 @@ from app.api.v1.core.rag.vector_store import (
 
 from app.db_setup import get_db
 
+# Add the import for Gemini LLM after the existing imports
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+# Add the LLM filtering function after the existing imports and before the router definition
+def format_shot_for_analysis(shot_data, index: int) -> str:
+    """Format a single shot for LLM analysis"""
+    doc, similarity_score = shot_data
+    metadata = doc.metadata
+    
+    # Extract conditions from the document content
+    content_lines = doc.page_content.split('\n')
+    conditions_section = []
+    recommendation_section = []
+    
+    in_recommendation = False
+    for line in content_lines:
+        if 'Recommendation:' in line:
+            in_recommendation = True
+            continue
+        if in_recommendation:
+            recommendation_section.append(line.strip())
+        else:
+            conditions_section.append(line.strip())
+    
+    conditions_text = '\n'.join(conditions_section).strip()
+    recommendation_text = '\n'.join(recommendation_section).strip()
+    
+    return f"""
+Shot {index + 1} (Embedding Similarity: {similarity_score:.3f}):
+Conditions: {conditions_text}
+Previous Recommendation: {recommendation_text}
+User Feedback: {'Liked' if metadata.get('liked') else 'Disliked' if metadata.get('liked') == False else 'No feedback'}
+Club Used: {metadata.get('club_used', 'Not specified')}
+Shot Result: {metadata.get('shot_result', 'Not specified')}
+Timestamp: {metadata.get('timestamp', 'Unknown')}
+---"""
+
+def llm_filter_shots(request: AgentQueryRequest, retrieved_shots: list, target_count: int = 3) -> list:
+    """Use Gemini to filter and rank the most relevant shots"""
+    
+    if len(retrieved_shots) <= target_count:
+        return retrieved_shots
+    
+    # Create Gemini LLM instance
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.0-flash",
+        google_api_key=settings.GEMINI_API_KEY,
+        temperature=0.1
+    )
+    
+    # Format current conditions using the Pydantic schema
+    lie_conditions = []
+    if request.fairway:
+        lie_conditions.append("fairway")
+    if request.light_rough:
+        lie_conditions.append("light rough")
+    if request.heavy_rough:
+        lie_conditions.append("heavy rough")
+    if request.hardpan:
+        lie_conditions.append("hardpan")
+    if request.divot:
+        lie_conditions.append("divot")
+    if request.bunker:
+        lie_conditions.append("bunker")
+    if request.uphill:
+        lie_conditions.append("uphill lie")
+    if request.downhill:
+        lie_conditions.append("downhill lie")
+    if request.ball_above_feet:
+        lie_conditions.append("ball above feet")
+    if request.ball_below_feet:
+        lie_conditions.append("ball below feet")
+    
+    if not lie_conditions:
+        lie_conditions = ["fairway"]
+    
+    ground_conditions = []
+    if request.wet_ground:
+        ground_conditions.append("wet ground")
+    if request.firm_ground:
+        ground_conditions.append("firm ground")
+    
+    ground_conditions_text = ", ".join(ground_conditions) if ground_conditions else "normal"
+    
+    current_conditions = f"""
+Distance to flag: {request.distance_to_flag} meters
+Wind speed: {request.wind_speed} m/s
+Wind direction: {request.wind_direction}
+Lie conditions: {', '.join(lie_conditions)}
+Ground conditions: {ground_conditions_text}
+"""
+    
+    # Format retrieved shots
+    formatted_shots = []
+    for i, shot in enumerate(retrieved_shots):
+        formatted_shots.append(format_shot_for_analysis(shot, i))
+    
+    shots_text = '\n'.join(formatted_shots)
+    
+    # Create filtering prompt
+    prompt = f"""You are a golf expert analyzing shot similarity for a golf caddie AI system.
+
+CURRENT SHOT CONDITIONS:
+{current_conditions.strip()}
+
+RETRIEVED SIMILAR SHOTS FROM EMBEDDING SEARCH:
+{shots_text}
+
+TASK: Select the {target_count} most relevant shots that would provide the best context for making a recommendation for the current shot.
+
+EVALUATION CRITERIA (in order of importance):
+1. Condition Similarity (40%): How closely do the distance, wind, and lie conditions match?
+2. Strategic Relevance (30%): Would the previous recommendation strategy apply to the current situation?
+3. Outcome Quality (20%): Did the previous shot work well (user liked it, good result)?
+4. Recency (10%): More recent shots may be more relevant to current playing style
+
+INSTRUCTIONS:
+- Consider that ±10 meters distance is very similar
+- Wind direction and speed should be reasonably close
+- Exact lie condition matches are highly valuable
+- User feedback (liked/disliked) is important for recommendation quality
+- Shot results like "on green" indicate successful recommendations
+
+OUTPUT FORMAT:
+Return only a JSON array with the shot numbers (1-based) of the top {target_count} most relevant shots, ordered by relevance.
+Example: [3, 1, 7]
+
+JSON Response:"""
+
+    try:
+        # Get LLM response
+        response = llm.invoke(prompt)
+        response_text = response.content.strip()
+        
+        # Extract JSON from response
+        if '[' in response_text and ']' in response_text:
+            json_start = response_text.find('[')
+            json_end = response_text.find(']') + 1
+            json_str = response_text[json_start:json_end]
+            selected_indices = json.loads(json_str)
+            
+            # Convert to 0-based indices and return corresponding shots
+            filtered_shots = []
+            for idx in selected_indices:
+                if 1 <= idx <= len(retrieved_shots):
+                    filtered_shots.append(retrieved_shots[idx - 1])
+            
+            print(f"LLM filtered {len(retrieved_shots)} shots down to {len(filtered_shots)} most relevant")
+            return filtered_shots[:target_count]
+        else:
+            # Fallback: return top shots by embedding similarity
+            print("LLM filtering failed, falling back to embedding similarity")
+            return retrieved_shots[:target_count]
+            
+    except Exception as e:
+        print(f"Error in LLM filtering: {str(e)}")
+        # Fallback: return top shots by embedding similarity
+        return retrieved_shots[:target_count]
+
 router = APIRouter()
 
-class AgentQueryRequest(BaseModel):
-    wind_speed: float
-    wind_direction: str
-    distance_to_flag: float
-    
-    # Surface type conditions (default to fairway if none specified)
-    fairway: bool = False
-    light_rough: bool = False
-    heavy_rough: bool = False
-    hardpan: bool = False
-    divot: bool = False
-    bunker: bool = False
-    
-    # Slope conditions (can combine with surface)
-    uphill: bool = False
-    downhill: bool = False
-    ball_above_feet: bool = False
-    ball_below_feet: bool = False
 
-    # Ground conditions
-    wet_ground: bool = False
-    firm_ground: bool = False
-
-class ShotFeedbackRequest(BaseModel):
-    """Request model for submitting feedback on a shot recommendation"""
-    timestamp: str = Field(..., description="Timestamp of the shot to provide feedback for")
-    liked: bool = Field(..., description="Whether the user liked the recommendation")
-    club_used: str = Field(None, description="The club the user actually used for the shot")
-    shot_result: str = Field(None, description="Brief description of the shot result (e.g., 'on green', 'short', 'long')")
 
 @router.post("/agent/query", status_code=status.HTTP_200_OK)
 def query_agent(
@@ -158,22 +294,28 @@ def query_agent(
         Ground conditions: {ground_conditions_text}
         """
         
-        # Check for similar shots from this user based on conditions
+        # Check for similar shots from this user based on conditions with LLM filtering
         try:
             # Initialize Chroma
             init_chroma()
             
-            # Search for similar shots by conditions - use a lower threshold to catch identical shots
-            similar_shots = search_by_conditions(
+            # Search for more shots initially (20) for LLM filtering
+            initial_shots = search_by_conditions(
                 conditions_text=conditions_text.strip(),
                 user_id=current_user.id,
-                k=2,
-                similarity_threshold=0.2  # Lower threshold to catch identical shots
+                k=20,  # Retrieve more shots for LLM filtering
+                similarity_threshold=0.1  # Lower threshold to get more candidates
             )
+            
+            # Use LLM to filter down to the 3 most relevant shots
+            if initial_shots:
+                similar_shots = llm_filter_shots(request, initial_shots, target_count=2)
+            else:
+                similar_shots = []
             
             # Add similar shots as context if any were found
             if similar_shots:
-                formatted_query += "### Your Previous Similar Shots:\n"
+                formatted_query += "### Your Previous Similar Shots (LLM-filtered for relevance):\n"
                 for i, (doc, score) in enumerate(similar_shots, 1):
                     # Extract the recommendation part
                     context_parts = doc.page_content.split("Recommendation:")
@@ -181,7 +323,7 @@ def query_agent(
                     recommendation = context_parts[1].strip() if len(context_parts) > 1 else "No recommendation found"
                     
                     # Format and add to query
-                    formatted_query += f"Similar Shot {i} (similarity: {score:.2f}):\n"
+                    formatted_query += f"Similar Shot {i} (embedding similarity: {score:.3f}):\n"
                     formatted_query += f"Context: {shot_context}\n"
                     formatted_query += f"Previous Recommendation: {recommendation}\n"
                     
@@ -208,7 +350,7 @@ def query_agent(
         formatted_query += "2. Gather info about the users clubs.\n"
         formatted_query += "3. Analyze how the wind affects the shot.\n"
         formatted_query += f"4. Calculate the effective distance after considering the wind and ground conditions: {ground_conditions_text}.\n"
-        formatted_query += f"5. Consider previous shots in your recommendation\n"
+        formatted_query += f"5. If user liked a previous similar shot recommendation. ONLY then do you take that recommendation into account for new recommendation\n"
 
         formatted_query += "6. IMPORTANT: Follow this format for your answer\n"
         formatted_query += "7. First explain what the conditions will do to the ball\n"

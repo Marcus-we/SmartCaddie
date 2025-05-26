@@ -123,3 +123,33 @@ class RoundSummarySchema(BaseModel):
     is_completed: bool
     
     model_config = ConfigDict(from_attributes=True)
+
+class AgentQueryRequest(BaseModel):
+    wind_speed: float
+    wind_direction: str
+    distance_to_flag: float
+    
+    # Surface type conditions (default to fairway if none specified)
+    fairway: bool = False
+    light_rough: bool = False
+    heavy_rough: bool = False
+    hardpan: bool = False
+    divot: bool = False
+    bunker: bool = False
+    
+    # Slope conditions (can combine with surface)
+    uphill: bool = False
+    downhill: bool = False
+    ball_above_feet: bool = False
+    ball_below_feet: bool = False
+
+    # Ground conditions
+    wet_ground: bool = False
+    firm_ground: bool = False
+
+class ShotFeedbackRequest(BaseModel):
+    """Request model for submitting feedback on a shot recommendation"""
+    timestamp: str = Field(..., description="Timestamp of the shot to provide feedback for")
+    liked: bool = Field(..., description="Whether the user liked the recommendation")
+    club_used: str = Field(None, description="The club the user actually used for the shot")
+    shot_result: str = Field(None, description="Brief description of the shot result (e.g., 'on green', 'short', 'long')")
