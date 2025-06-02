@@ -74,20 +74,13 @@ def verify_token_access(token_str: str, db: Session) -> Token:
     """
     Return a token
     """
-    max_age = timedelta(minutes=int(settings.ACCESS_TOKEN_EXPIRE_MINUTES))
     token = (
-        db.execute(
-            select(Token).where(
-                Token.token == token_str, Token.created_at >= datetime.now(UTC) - max_age
-            ),
-        )
-        .scalars()
-        .first()
-    )
+        db.execute(select(Token).where(Token.token == token_str)).scalars().first())
+    
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalid or expired",
+            detail="Token invalid",
             headers={"WWW-Authenticate": "Bearer"},
         )
     return token

@@ -73,7 +73,7 @@ Timestamp: {metadata.get('timestamp', 'Unknown')}
 ---"""
 
 def llm_filter_shots(request: AgentQueryRequest, retrieved_shots: list, target_count: int = 3) -> list:
-    """Use Gemini to filter and rank the most relevant shots"""
+    """Use Gemini to filter and rank the most relevant shots - ONLY liked recommendations with 95% similarity"""
     
     if len(retrieved_shots) <= target_count:
         return retrieved_shots
@@ -134,33 +134,55 @@ Ground conditions: {ground_conditions_text}
     
     shots_text = '\n'.join(formatted_shots)
     
-    # Create filtering prompt
-    prompt = f"""You are a golf expert analyzing shot similarity for a golf caddie AI system.
+    # Create MUCH more restrictive filtering prompt
+    prompt = f"""You are a golf expert with EXTREMELY strict criteria for selecting previous recommendations.
 
 CURRENT SHOT CONDITIONS:
 {current_conditions.strip()}
 
-RETRIEVED SIMILAR SHOTS FROM EMBEDDING SEARCH:
+RETRIEVED SHOTS FROM DATABASE:
 {shots_text}
 
-TASK: Select the {target_count} most relevant shots that would provide the best context for making a recommendation for the current shot.
+CRITICAL REQUIREMENTS (ALL must be met for selection):
 
-EVALUATION CRITERIA (in order of importance):
-1. Condition Similarity (40%): How closely do the distance, wind, and lie conditions match?
-2. Strategic Relevance (30%): Would the previous recommendation strategy apply to the current situation?
-3. Outcome Quality (20%): Did the previous shot work well (user liked it, good result)?
-4. Recency (10%): More recent shots may be more relevant to current playing style
+1. USER FEEDBACK: ONLY select shots where "User Feedback: Liked" - NEVER select disliked or no feedback shots
+2. 95% SIMILARITY REQUIREMENT across ALL categories:
 
-INSTRUCTIONS:
-- Consider that ±10 meters distance is very similar
-- Wind direction and speed should be reasonably close
-- Exact lie condition matches are highly valuable
-- User feedback (liked/disliked) is important for recommendation quality
-- Shot results like "on green" indicate successful recommendations
+   DISTANCE SIMILARITY (±5%):
+   - Current: {request.distance_to_flag}m
+   - Required range: {request.distance_to_flag * 0.95:.1f}m to {request.distance_to_flag * 1.05:.1f}m
+   
+   WIND SPEED SIMILARITY (±5%):
+   - Current: {request.wind_speed} m/s  
+   - Required range: {request.wind_speed * 0.95:.1f} to {request.wind_speed * 1.05:.1f} m/s
+   
+   WIND DIRECTION (EXACT MATCH REQUIRED):
+   - Current: {request.wind_direction}
+   - Required: EXACTLY "{request.wind_direction}" (no exceptions)
+   
+   LIE CONDITIONS (EXACT MATCH REQUIRED):
+   - Current: {', '.join(lie_conditions)}
+   - Required: EXACTLY the same lie conditions (no substitutions)
+   
+   GROUND CONDITIONS (EXACT MATCH REQUIRED):
+   - Current: {ground_conditions_text}
+   - Required: EXACTLY "{ground_conditions_text}"
 
-OUTPUT FORMAT:
-Return only a JSON array with the shot numbers (1-based) of the top {target_count} most relevant shots, ordered by relevance.
-Example: [3, 1, 7]
+STRICT EVALUATION PROCESS:
+1. FIRST: Check if user feedback is "Liked" - if not, REJECT immediately
+2. SECOND: Check distance is within ±5% range - if not, REJECT
+3. THIRD: Check wind speed is within ±5% range - if not, REJECT  
+4. FOURTH: Check wind direction is EXACTLY the same - if not, REJECT
+5. FIFTH: Check lie conditions are EXACTLY the same - if not, REJECT
+6. SIXTH: Check ground conditions are EXACTLY the same - if not, REJECT
+
+IMPORTANT: This is for training a golf AI system. It's better to return NO recommendations than to use recommendations that don't meet the 95% similarity criteria or weren't liked by the user.
+
+OUTPUT INSTRUCTIONS:
+- If ANY shot meets ALL criteria above, return its shot number(s) in JSON format: [shot_number]
+- If NO shots meet ALL criteria, return: []
+- Maximum {target_count} shots even if more qualify
+- Order by most recent timestamp if multiple qualify
 
 JSON Response:"""
 
@@ -182,17 +204,17 @@ JSON Response:"""
                 if 1 <= idx <= len(retrieved_shots):
                     filtered_shots.append(retrieved_shots[idx - 1])
             
-            print(f"LLM filtered {len(retrieved_shots)} shots down to {len(filtered_shots)} most relevant")
+            print(f"LLM strictly filtered {len(retrieved_shots)} shots down to {len(filtered_shots)} that meet 95% similarity + liked criteria")
             return filtered_shots[:target_count]
         else:
-            # Fallback: return top shots by embedding similarity
-            print("LLM filtering failed, falling back to embedding similarity")
-            return retrieved_shots[:target_count]
+            # No qualifying shots found
+            print("LLM found no shots meeting the strict 95% similarity + liked criteria")
+            return []
             
     except Exception as e:
-        print(f"Error in LLM filtering: {str(e)}")
-        # Fallback: return top shots by embedding similarity
-        return retrieved_shots[:target_count]
+        print(f"Error in strict LLM filtering: {str(e)}")
+        # For this strict filtering, don't fall back - return empty if there's an error
+        return []
 
 router = APIRouter()
 
@@ -527,64 +549,107 @@ def update_shot_feedback(
                 detail="Shot ID not found in metadata"
             )
         
-        # Create updated metadata
-        updated_metadata = results['metadatas'][found_index].copy()
-        updated_metadata["liked"] = request.liked
-        
-        # Add club information if provided
-        if request.club_used:
-            updated_metadata["club_used"] = request.club_used
-        
-        # Add shot result if provided
-        if request.shot_result:
-            updated_metadata["shot_result"] = request.shot_result
-        
-        # Update both collections
-        
-        # 1. First delete and update the full store
-        full_store.delete(ids=[doc_id])
-        full_store.add_texts(
-            texts=[doc_content],
-            metadatas=[updated_metadata],
-            ids=[doc_id]
-        )
-        full_store.persist()
-        
-        # 2. Update the conditions store
-        try:
-            # Get the conditions document with the same shot_id
-            conditions_results = conditions_store.get(
-                where={"shot_id": shot_id}
-            )
+        # Check if user disliked the recommendation
+        if not request.liked:
+            # User disliked - DELETE the recommendation from both stores
             
-            if conditions_results and conditions_results['ids']:
-                # Get the conditions document ID and content
-                conditions_doc_id = conditions_results['ids'][0]
-                conditions_content = conditions_results['documents'][0]
-                
-                # Delete and re-add with updated metadata
-                conditions_store.delete(ids=[conditions_doc_id])
-                conditions_store.add_texts(
-                    texts=[conditions_content],
-                    metadatas=[updated_metadata],
-                    ids=[conditions_doc_id]
+            # 1. Delete from full store
+            full_store.delete(ids=[doc_id])
+            full_store.persist()
+            
+            # 2. Delete from conditions store
+            try:
+                # Get the conditions document with the same shot_id
+                conditions_results = conditions_store.get(
+                    where={"shot_id": shot_id}
                 )
-                conditions_store.persist()
-        except Exception as e:
-            print(f"Error updating conditions store: {str(e)}")
-            # Continue even if conditions update fails
+                
+                if conditions_results and conditions_results['ids']:
+                    # Get the conditions document ID
+                    conditions_doc_id = conditions_results['ids'][0]
+                    
+                    # Delete from conditions store
+                    conditions_store.delete(ids=[conditions_doc_id])
+                    conditions_store.persist()
+            except Exception as e:
+                print(f"Error deleting from conditions store: {str(e)}")
+                # Continue even if conditions deletion fails
+            
+            # Prepare deletion message
+            feedback_message = f"Shot recommendation deleted due to negative feedback."
+            if request.club_used:
+                feedback_message += f" Club used: {request.club_used}"
+            if request.shot_result:
+                feedback_message += f". Result: {request.shot_result}"
+            
+            return {
+                "status": "success",
+                "message": feedback_message,
+                "action": "deleted"
+            }
         
-        # Prepare success message
-        feedback_message = f"Shot feedback updated. User {'liked' if request.liked else 'disliked'} the recommendation."
-        if request.club_used:
-            feedback_message += f" Used club: {request.club_used}"
-        if request.shot_result:
-            feedback_message += f". Result: {request.shot_result}"
-        
-        return {
-            "status": "success",
-            "message": feedback_message
-        }
+        else:
+            # User liked - UPDATE the recommendation with feedback metadata
+            
+            # Create updated metadata
+            updated_metadata = results['metadatas'][found_index].copy()
+            updated_metadata["liked"] = request.liked
+            
+            # Add club information if provided
+            if request.club_used:
+                updated_metadata["club_used"] = request.club_used
+            
+            # Add shot result if provided
+            if request.shot_result:
+                updated_metadata["shot_result"] = request.shot_result
+            
+            # Update both collections
+            
+            # 1. First delete and update the full store
+            full_store.delete(ids=[doc_id])
+            full_store.add_texts(
+                texts=[doc_content],
+                metadatas=[updated_metadata],
+                ids=[doc_id]
+            )
+            full_store.persist()
+            
+            # 2. Update the conditions store
+            try:
+                # Get the conditions document with the same shot_id
+                conditions_results = conditions_store.get(
+                    where={"shot_id": shot_id}
+                )
+                
+                if conditions_results and conditions_results['ids']:
+                    # Get the conditions document ID and content
+                    conditions_doc_id = conditions_results['ids'][0]
+                    conditions_content = conditions_results['documents'][0]
+                    
+                    # Delete and re-add with updated metadata
+                    conditions_store.delete(ids=[conditions_doc_id])
+                    conditions_store.add_texts(
+                        texts=[conditions_content],
+                        metadatas=[updated_metadata],
+                        ids=[conditions_doc_id]
+                    )
+                    conditions_store.persist()
+            except Exception as e:
+                print(f"Error updating conditions store: {str(e)}")
+                # Continue even if conditions update fails
+            
+            # Prepare success message
+            feedback_message = f"Shot feedback updated. User liked the recommendation."
+            if request.club_used:
+                feedback_message += f" Used club: {request.club_used}"
+            if request.shot_result:
+                feedback_message += f". Result: {request.shot_result}"
+            
+            return {
+                "status": "success",
+                "message": feedback_message,
+                "action": "updated"
+            }
         
     except HTTPException:
         # Re-raise HTTP exceptions
@@ -592,5 +657,5 @@ def update_shot_feedback(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating shot feedback: {str(e)}"
+            detail=f"Error processing shot feedback: {str(e)}"
         )

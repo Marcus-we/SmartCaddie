@@ -81,3 +81,4 @@ var/
 .installed.cfg
 *.egg
 .gitignore
+dataset

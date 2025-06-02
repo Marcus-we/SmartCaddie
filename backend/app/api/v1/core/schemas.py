@@ -153,3 +153,43 @@ class ShotFeedbackRequest(BaseModel):
     liked: bool = Field(..., description="Whether the user liked the recommendation")
     club_used: str = Field(None, description="The club the user actually used for the shot")
     shot_result: str = Field(None, description="Brief description of the shot result (e.g., 'on green', 'short', 'long')")
+
+# Course related schemas
+class CourseHoleSchema(BaseModel):
+    hole_number: int
+    distance_yards: int | None = None
+    distance_meters: float | None = None
+    par: int | None = None
+    handicap: int | None = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CourseTeeSchema(BaseModel):
+    id: int
+    tee_name: str
+    mens_rating: float | None = None
+    mens_slope: float | None = None
+    womens_rating: float | None = None
+    womens_slope: float | None = None
+    total_distance_yards: int | None = None
+    total_distance_meters: float | None = None
+    total_par: int | None = None
+    holes: List[CourseHoleSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CourseDetailsSchema(BaseModel):
+    id: int
+    course_name: str
+    location: str | None = None
+    total_holes: int
+    tees: List[CourseTeeSchema] = []
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CourseFilters(BaseModel):
+    tee_types: List[str] | None = None
+    min_total_distance: int | None = None
+    max_total_distance: int | None = None
+    min_total_par: int | None = None
+    max_total_par: int | None = None

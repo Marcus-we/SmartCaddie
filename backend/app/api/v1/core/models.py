@@ -82,6 +82,10 @@ class Rounds(Base):
     # Basic round info
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     course_name: Mapped[str] = mapped_column(String(255))
+
+    # NEW: Golf course integration
+    course_id: Mapped[int] = mapped_column(ForeignKey("golf_courses.id"), nullable=True)
+    tee_id: Mapped[int] = mapped_column(ForeignKey("course_tees.id"), nullable=True)
     
     # Round configuration
     total_holes: Mapped[int] = mapped_column(Integer)  # 9 or 18
@@ -106,6 +110,8 @@ class Rounds(Base):
     
     # Relationships
     user: Mapped["Users"] = relationship(back_populates="rounds")
+    course: Mapped["GolfCourses"] = relationship()
+    tee: Mapped["CourseTees"] = relationship()
     hole_scores: Mapped[list["HoleScores"]] = relationship(
         back_populates="round", 
         cascade="all, delete-orphan",
@@ -137,5 +143,48 @@ class HoleScores(Base):
     __table_args__ = (
         UniqueConstraint('round_id', 'hole_number', name='unique_round_hole'),
     )
+
+class GolfCourses(Base):
+    __tablename__ = "golf_courses"
+    
+    course_name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    location: Mapped[str] = mapped_column(String(255), nullable=True)
+    total_holes: Mapped[int] = mapped_column(Integer)  # 9 or 18
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    tees: Mapped[list["CourseTees"]] = relationship(back_populates="course", cascade="all, delete-orphan")
+
+class CourseTees(Base):
+    __tablename__ = "course_tees"
+    
+    course_id: Mapped[int] = mapped_column(ForeignKey("golf_courses.id", ondelete="CASCADE"))
+    tee_name: Mapped[str] = mapped_column(String(50))  # Yellow, Red, White, etc.
+    
+    # Ratings
+    mens_rating: Mapped[float] = mapped_column(Numeric, nullable=True)
+    mens_slope: Mapped[float] = mapped_column(Numeric, nullable=True)
+    womens_rating: Mapped[float] = mapped_column(Numeric, nullable=True)
+    womens_slope: Mapped[float] = mapped_column(Numeric, nullable=True)
+    
+    total_distance: Mapped[int] = mapped_column(Integer, nullable=True)
+    total_par: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Relationships
+    course: Mapped["GolfCourses"] = relationship(back_populates="tees")
+    holes: Mapped[list["CourseHoles"]] = relationship(back_populates="tee", cascade="all, delete-orphan")
+
+class CourseHoles(Base):
+    __tablename__ = "course_holes"
+    
+    tee_id: Mapped[int] = mapped_column(ForeignKey("course_tees.id", ondelete="CASCADE"))
+    hole_number: Mapped[int] = mapped_column(Integer)
+    
+    distance_yards: Mapped[int] = mapped_column(Integer, nullable=True)
+    par: Mapped[int] = mapped_column(Integer, nullable=True)
+    handicap: Mapped[int] = mapped_column(Integer, nullable=True)
+    
+    # Relationships
+    tee: Mapped["CourseTees"] = relationship(back_populates="holes")
 
     

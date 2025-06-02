@@ -103,6 +103,19 @@ def calculate_wind_effect(wind_speed: float, wind_direction: str, distance_to_fl
     # Calculate effective distance needed to counter wind effect
     effective_distance_needed = distance_to_flag + distance_effect
     
+    # Create detailed explanation based on wind type
+    if wind_type == "crosswind":
+        if wind_direction == "crosswind-left":
+            drift_explanation = f"The ball will drift to the RIGHT approximately {abs(round(lateral_effect, 1))} meters due to the crosswind from the left."
+        elif wind_direction == "crosswind-right":
+            drift_explanation = f"The ball will drift to the LEFT approximately {abs(round(lateral_effect, 1))} meters due to the crosswind from the right."
+        else:
+            drift_explanation = f"Account for {abs(round(lateral_effect, 1))} meters of lateral drift."
+        
+        explanation = f"With {wind_speed} m/s {wind_direction}, although the flag is {distance_to_flag} meters away, you should play the shot as if it were {round(effective_distance_needed, 1)} meters (an adjustment of {round(distance_effect, 1)} meters). {drift_explanation}"
+    else:
+        explanation = f"With {wind_speed} m/s {wind_type}, although the flag is {distance_to_flag} meters away, you should play the shot as if it were {round(effective_distance_needed, 1)} meters (an adjustment of {round(distance_effect, 1)} meters)."
+    
     return {
         "actual_distance_to_flag_meters": distance_to_flag,
         "effective_distance_needed_meters": round(effective_distance_needed, 1),
@@ -110,7 +123,7 @@ def calculate_wind_effect(wind_speed: float, wind_direction: str, distance_to_fl
         "lateral_drift_meters": round(lateral_effect, 1),
         "wind_type": wind_type,
         "wind_speed_mps": wind_speed,
-        "explanation": f"With {wind_speed} m/s {wind_type}, although the flag is {distance_to_flag} meters away, you should play the shot as if it were {round(effective_distance_needed, 1)} meters (an adjustment of {round(distance_effect, 1)} meters). {'' if lateral_effect == 0 else f'Account for {abs(round(lateral_effect, 1))} meters of lateral drift.'}"
+        "explanation": explanation
     }
 
 @tool

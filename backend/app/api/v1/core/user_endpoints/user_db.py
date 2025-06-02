@@ -22,7 +22,10 @@ from app.api.v1.core.schemas import (
 
 def create_user_db(user: UserRegisterSchema, db):
 
-    user = Users(**user.model_dump(exclude="hashed_password"), hashed_password=hash_password(user.password))
+    normalized_user_data = user.model_dump(exclude="hashed_password")
+    normalized_user_data['email'] = normalized_user_data['email'].lower().strip()
+    
+    user = Users(**normalized_user_data, hashed_password=hash_password(user.password))
 
     db.add(user)
     db.commit()

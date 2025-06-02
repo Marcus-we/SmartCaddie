@@ -27,12 +27,12 @@ def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Session = Depends(get_db),
 ) -> TokenSchema:
-    # Keep in mind that without the response model or return schema
-    # we would expose the hashed password, which absolutely cannot happen
-    # Perhaps better to use .only or select the columns explicitly
+    
+    normalized_email = form_data.username.lower().strip()
+    
     user = (
         db.execute(
-            select(Users).where(Users.email == form_data.username),
+            select(Users).where(Users.email == normalized_email),
         )
         .scalars()
         .first()
