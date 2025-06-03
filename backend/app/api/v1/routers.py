@@ -5,6 +5,7 @@ from app.api.v1.core.ai_endpoints.ai import router as ai_router
 from app.api.v1.core.course_endpoints.rounds_endpoints import router as rounds_router
 from app.api.v1.core.course_endpoints.courses import router as course_router
 
+
 router = APIRouter()
 
 router.include_router(user_router)

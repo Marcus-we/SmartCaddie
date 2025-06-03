@@ -6,6 +6,7 @@ from typing import Optional, List
 from random import randint
 import bcrypt
 from app.security import hash_password
+from datetime import datetime, timezone
 
 from app.api.v1.core.models import (
     Users,
@@ -21,9 +22,13 @@ from app.api.v1.core.schemas import (
 )
 
 def create_user_db(user: UserRegisterSchema, db):
-
     normalized_user_data = user.model_dump(exclude="hashed_password")
     normalized_user_data['email'] = normalized_user_data['email'].lower().strip()
+    
+    # Set handicap from initial_handicap (which defaults to 54.0)
+    initial_handicap = normalized_user_data.pop('initial_handicap')
+    normalized_user_data['handicap_index'] = initial_handicap
+    normalized_user_data['last_handicap_update'] = datetime.now(timezone.utc)
     
     user = Users(**normalized_user_data, hashed_password=hash_password(user.password))
 

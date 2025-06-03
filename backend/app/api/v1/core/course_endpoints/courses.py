@@ -13,7 +13,7 @@ def convert_to_meters(yards: int | None) -> float | None:
     """Convert yards to meters."""
     if yards is None:
         return None
-    return round(float(yards) * YARDS_TO_METERS, 2)
+    return round(float(yards) * YARDS_TO_METERS)
 
 def prepare_course_data(course: GolfCourses, filtered_tees: List[CourseTees], use_meters: bool) -> dict:
     """Prepare course data for response, handling distance conversions."""

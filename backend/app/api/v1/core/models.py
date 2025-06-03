@@ -38,6 +38,8 @@ class Users(Base):
     email: Mapped[str] = mapped_column(String(150), unique=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     hashed_password: Mapped[str] = mapped_column(String(150))
+    handicap_index: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
+    last_handicap_update: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -98,6 +100,8 @@ class Rounds(Base):
     total_shots: Mapped[int] = mapped_column(Integer, nullable=True)
     total_par: Mapped[int] = mapped_column(Integer, nullable=True)
     score_relative_to_par: Mapped[int] = mapped_column(Integer, nullable=True)
+    score_differential: Mapped[float] = mapped_column(Numeric(3, 1), nullable=True)
+    included_in_handicap: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Status
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)

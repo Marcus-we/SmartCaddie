@@ -6,7 +6,7 @@ from sqlalchemy import desc
 
 from app.db_setup import get_db
 from app.security import get_current_user
-from app.api.v1.core.models import Users, Rounds, HoleScores
+from app.api.v1.core.models import Users, Rounds, HoleScores, GolfCourses, CourseTees
 from app.api.v1.core.schemas import (
     StartRoundSchema, 
     UpdateHoleScoreSchema, 
@@ -15,6 +15,7 @@ from app.api.v1.core.schemas import (
     RoundSummarySchema,
     HoleScoreOutSchema
 )
+from .handicap import update_round_handicap_data, update_user_handicap
 
 router = APIRouter(prefix="/rounds", tags=["rounds"])
 
@@ -39,32 +40,27 @@ async def start_round(
             detail="You already have an active round. Please complete it first."
         )
     
-    # Validate holes configuration
-    if len(round_data.holes_config) != round_data.total_holes:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Number of holes in config ({len(round_data.holes_config)}) doesn't match total_holes ({round_data.total_holes})"
-        )
-    
-    # Validate hole numbers are sequential
-    hole_numbers = [hole.hole_number for hole in round_data.holes_config]
-    expected_holes = list(range(1, round_data.total_holes + 1))
-    if sorted(hole_numbers) != expected_holes:
-        raise HTTPException(
-            status_code=400,
-            detail="Hole numbers must be sequential from 1 to total_holes"
-        )
-    
-    # Calculate total par
-    total_par = sum(hole.par for hole in round_data.holes_config)
+    # Get course and tee data
+    course = db.query(GolfCourses).filter(GolfCourses.id == round_data.course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+        
+    tee = db.query(CourseTees).filter(
+        CourseTees.id == round_data.tee_id,
+        CourseTees.course_id == round_data.course_id
+    ).first()
+    if not tee:
+        raise HTTPException(status_code=404, detail="Tee not found")
     
     # Create round
     new_round = Rounds(
         user_id=current_user.id,
-        course_name=round_data.course_name,
-        total_holes=round_data.total_holes,
+        course_name=course.course_name,
+        course_id=course.id,
+        tee_id=tee.id,
+        total_holes=course.total_holes,
         start_time=datetime.now(timezone.utc),
-        total_par=total_par,
+        total_par=tee.total_par,
         total_shots=0,
         score_relative_to_par=0
     )
@@ -72,15 +68,15 @@ async def start_round(
     db.add(new_round)
     db.flush()  # Get the round ID
     
-    # Create hole scores
+    # Create hole scores from tee data
     hole_scores = []
-    for hole_config in round_data.holes_config:
+    for hole in tee.holes:
         hole_score = HoleScores(
             round_id=new_round.id,
-            hole_number=hole_config.hole_number,
-            par=hole_config.par,
+            hole_number=hole.hole_number,
+            par=hole.par,
             shots=0,
-            score_relative_to_par=-hole_config.par  # 0 shots - par
+            score_relative_to_par=-hole.par  # 0 shots - par
         )
         db.add(hole_score)
         hole_scores.append(hole_score)
@@ -185,7 +181,10 @@ async def complete_round(
     round_obj.end_time = datetime.now(timezone.utc)
     round_obj.notes = completion_data.notes
     
-    db.commit()
+    # Calculate score differential and update handicap
+    update_round_handicap_data(db, round_obj)
+    update_user_handicap(db, current_user.id)
+    
     db.refresh(round_obj)
     
     return round_obj

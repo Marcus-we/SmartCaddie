@@ -25,6 +25,7 @@ class UserRegisterSchema(BaseModel):
     last_name: str
     password: str
     is_admin: bool = False
+    initial_handicap: float = 54.0
     model_config = ConfigDict(from_attributes=True)
     
 
@@ -38,6 +39,9 @@ class UserOutSchema(BaseModel):
     first_name: str
     last_name: str
     is_admin: bool
+    handicap_index: float | None
+    last_handicap_update: datetime | None
+    
     model_config = ConfigDict(from_attributes=True)
 
 class PasswordChangeSchema(BaseModel):
@@ -67,9 +71,8 @@ class HoleConfigSchema(BaseModel):
     par: int = Field(..., ge=3, le=5)
 
 class StartRoundSchema(BaseModel):
-    course_name: str = Field(..., min_length=1, max_length=255)
-    total_holes: int = Field(..., ge=9, le=18)
-    holes_config: List[HoleConfigSchema]
+    course_id: int = Field(..., description="ID of the selected golf course")
+    tee_id: int = Field(..., description="ID of the selected tee")
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -105,6 +108,8 @@ class RoundOutSchema(BaseModel):
     total_shots: int | None
     total_par: int | None
     score_relative_to_par: int | None
+    score_differential: float | None
+    included_in_handicap: bool
     is_completed: bool
     notes: str | None
     hole_scores: List[HoleScoreOutSchema] = []
@@ -120,6 +125,8 @@ class RoundSummarySchema(BaseModel):
     total_shots: int | None
     total_par: int | None
     score_relative_to_par: int | None
+    score_differential: float | None
+    included_in_handicap: bool
     is_completed: bool
     
     model_config = ConfigDict(from_attributes=True)
@@ -158,7 +165,7 @@ class ShotFeedbackRequest(BaseModel):
 class CourseHoleSchema(BaseModel):
     hole_number: int
     distance_yards: int | None = None
-    distance_meters: float | None = None
+    distance_meters: int | None = None
     par: int | None = None
     handicap: int | None = None
     
@@ -172,7 +179,7 @@ class CourseTeeSchema(BaseModel):
     womens_rating: float | None = None
     womens_slope: float | None = None
     total_distance_yards: int | None = None
-    total_distance_meters: float | None = None
+    total_distance_meters: int | None = None
     total_par: int | None = None
     holes: List[CourseHoleSchema] = []
     
@@ -193,3 +200,15 @@ class CourseFilters(BaseModel):
     max_total_distance: int | None = None
     min_total_par: int | None = None
     max_total_par: int | None = None
+
+class UserSchema(BaseModel):
+    id: int
+    email: str
+    first_name: str
+    last_name: str
+    is_admin: bool
+    handicap_index: float | None
+    last_handicap_update: datetime | None
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
