@@ -372,7 +372,7 @@ def query_agent(
         formatted_query += "2. Gather info about the users clubs.\n"
         formatted_query += "3. Analyze how the wind affects the shot.\n"
         formatted_query += f"4. Calculate the effective distance after considering the wind and ground conditions: {ground_conditions_text}.\n"
-        formatted_query += f"5. If user liked a previous similar shot recommendation. ONLY then do you take that recommendation into account for new recommendation\n"
+        formatted_query += f"5. Take previous recommendations into account for new recommendation\n"
 
         formatted_query += "6. IMPORTANT: Follow this format for your answer\n"
         formatted_query += "7. First explain what the conditions will do to the ball\n"

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { Link, router } from 'expo-router'
 import authStore from '../../store/authStore'
+import { formatHandicapIndex } from '../utils/formatters'
 
 export default function Profile() {
     const { userData, logout } = authStore()
@@ -114,6 +115,19 @@ export default function Profile() {
                                 <View className="w-3 h-3 bg-green-500 rounded-full mr-2" />
                                 <Text className="text-green-600 font-semibold">Active Member</Text>
                             </View>
+                            {userData?.handicap_index !== null && (
+                                <View className="mt-4 items-center">
+                                    <Text className="text-3xl font-bold text-green-700">
+                                        {formatHandicapIndex(userData.handicap_index)}
+                                    </Text>
+                                    <Text className="text-gray-600 text-sm">Handicap</Text>
+                                    {userData?.last_handicap_update && (
+                                        <Text className="text-gray-500 text-xs mt-1">
+                                            Last updated: {new Date(userData.last_handicap_update).toLocaleDateString()}
+                                        </Text>
+                                    )}
+                                </View>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -160,18 +174,6 @@ export default function Profile() {
                         title="Round History"
                         subtitle="View your completed rounds"
                         href="/(dashboard)/round-history"
-                    />
-                    <ProfileItem
-                        icon="location-outline"
-                        title="Home Course"
-                        subtitle="Set your primary golf course"
-                        onPress={() => Alert.alert('Coming Soon', 'Course selection will be available soon!')}
-                    />
-                    <ProfileItem
-                        icon="speedometer-outline"
-                        title="Handicap"
-                        subtitle="Update your golf handicap"
-                        onPress={() => Alert.alert('Coming Soon', 'Handicap tracking will be available soon!')}
                     />
                 </ProfileSection>
 

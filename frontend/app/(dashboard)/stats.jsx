@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { Link } from 'expo-router'
 import useRoundStore from '../../store/roundStore'
+import authStore from '../../store/authStore'
+import { formatHandicapIndex } from '../utils/formatters'
 
 // Simple custom chart component
 const SimpleLineChart = ({ data, labels, width, height }) => {
@@ -128,6 +130,7 @@ const SimpleLineChart = ({ data, labels, width, height }) => {
 export default function Stats() {
     const [selectedPeriod, setSelectedPeriod] = useState('all')
     const { roundHistory, loading, getRoundHistory } = useRoundStore()
+    const { userData } = authStore()
 
     useEffect(() => {
         loadRoundHistory()
@@ -469,91 +472,117 @@ export default function Stats() {
                 </View>
 
                 {/* Performance Metrics */}
-                {stats.roundsPlayed > 0 && (
-                    <View className="px-6 mb-6">
-                        <Text className="text-xl font-bold text-green-900 mb-4">
-                            Performance Metrics
-                        </Text>
-                        
-                        <View className="gap-3">
-                            {/* Total Shots vs Par */}
+                <View className="px-6 mb-6">
+                    <Text className="text-xl font-bold text-green-900 mb-4">
+                        Performance Metrics
+                    </Text>
+                    <View className="gap-3">
+                        {/* Handicap Section */}
+                        {userData?.handicap_index !== null && (
                             <View className="bg-white rounded-2xl p-4 shadow-sm">
                                 <View className="flex-row items-center justify-between">
                                     <View className="flex-row items-center">
                                         <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3">
-                                            <Ionicons name="golf" size={20} color="#059669" />
+                                            <Ionicons name="speedometer" size={20} color="#059669" />
                                         </View>
                                         <View>
                                             <Text className="text-lg font-semibold text-gray-900">
-                                                Total Shots
+                                                Handicap Index
                                             </Text>
                                             <Text className="text-gray-600 text-sm">
-                                                All rounds combined
+                                                Based on best 8 of last 20 rounds
                                             </Text>
                                         </View>
                                     </View>
                                     <Text className="text-2xl font-bold text-green-600">
-                                        {stats.totalShots}
+                                        {formatHandicapIndex(userData.handicap_index)}
                                     </Text>
                                 </View>
+                                {userData?.last_handicap_update && (
+                                    <Text className="text-gray-500 text-xs mt-2">
+                                        Last updated: {new Date(userData.last_handicap_update).toLocaleDateString()}
+                                    </Text>
+                                )}
                             </View>
-
-                            {/* Total Par */}
-                            <View className="bg-white rounded-2xl p-4 shadow-sm">
-                                <View className="flex-row items-center justify-between">
-                                    <View className="flex-row items-center">
-                                        <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center mr-3">
-                                            <Ionicons name="flag" size={20} color="#3B82F6" />
-                                        </View>
-                                        <View>
-                                            <Text className="text-lg font-semibold text-gray-900">
-                                                Total Par
-                                            </Text>
-                                            <Text className="text-gray-600 text-sm">
-                                                All rounds combined
-                                            </Text>
-                                        </View>
+                        )}
+                        
+                        {/* Existing Total Shots Section */}
+                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                            <View className="flex-row items-center justify-between">
+                                <View className="flex-row items-center">
+                                    <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3">
+                                        <Ionicons name="golf" size={20} color="#059669" />
                                     </View>
-                                    <Text className="text-2xl font-bold text-blue-600">
-                                        {stats.totalPar}
-                                    </Text>
-                                </View>
-                            </View>
-
-                            {/* Efficiency Rating */}
-                            <View className="bg-white rounded-2xl p-4 shadow-sm">
-                                <View className="flex-row items-center justify-between mb-3">
-                                    <View className="flex-row items-center">
-                                        <View className="w-10 h-10 bg-orange-100 rounded-full items-center justify-center mr-3">
-                                            <Ionicons name="analytics" size={20} color="#F59E0B" />
-                                        </View>
-                                        <View>
-                                            <Text className="text-lg font-semibold text-gray-900">
-                                                Efficiency Rating
-                                            </Text>
-                                            <Text className="text-gray-600 text-sm">
-                                                Shots vs Par percentage
-                                            </Text>
-                                        </View>
+                                    <View>
+                                        <Text className="text-lg font-semibold text-gray-900">
+                                            Total Shots
+                                        </Text>
+                                        <Text className="text-gray-600 text-sm">
+                                            All rounds combined
+                                        </Text>
                                     </View>
-                                    <Text className="text-2xl font-bold text-orange-600">
-                                        {stats.averageEfficiency}%
-                                    </Text>
                                 </View>
-                                <View className="bg-gray-200 rounded-full h-2">
-                                    <View 
-                                        className="bg-orange-500 h-2 rounded-full" 
-                                        style={{ width: `${Math.min(stats.averageEfficiency, 200) / 2}%` }}
-                                    />
-                                </View>
-                                <Text className="text-gray-500 text-xs mt-2">
-                                    {stats.averageEfficiency < 100 ? 'Under par average' : 
-                                     stats.averageEfficiency === 100 ? 'Par average' : 'Over par average'}
+                                <Text className="text-2xl font-bold text-green-600">
+                                    {stats.totalShots}
                                 </Text>
                             </View>
                         </View>
+
+                        {/* Total Par */}
+                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                            <View className="flex-row items-center justify-between">
+                                <View className="flex-row items-center">
+                                    <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center mr-3">
+                                        <Ionicons name="flag" size={20} color="#3B82F6" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-lg font-semibold text-gray-900">
+                                            Total Par
+                                        </Text>
+                                        <Text className="text-gray-600 text-sm">
+                                            All rounds combined
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text className="text-2xl font-bold text-blue-600">
+                                    {stats.totalPar}
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Efficiency Rating */}
+                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                            <View className="flex-row items-center justify-between mb-3">
+                                <View className="flex-row items-center">
+                                    <View className="w-10 h-10 bg-orange-100 rounded-full items-center justify-center mr-3">
+                                        <Ionicons name="analytics" size={20} color="#F59E0B" />
+                                    </View>
+                                    <View>
+                                        <Text className="text-lg font-semibold text-gray-900">
+                                            Efficiency Rating
+                                        </Text>
+                                        <Text className="text-gray-600 text-sm">
+                                            Shots vs Par percentage
+                                        </Text>
+                                    </View>
+                                </View>
+                                <Text className="text-2xl font-bold text-orange-600">
+                                    {stats.averageEfficiency}%
+                                </Text>
+                            </View>
+                            <View className="bg-gray-200 rounded-full h-2">
+                                <View 
+                                    className="bg-orange-500 h-2 rounded-full" 
+                                    style={{ width: `${Math.min(stats.averageEfficiency, 200) / 2}%` }}
+                                />
+                            </View>
+                            <Text className="text-gray-500 text-xs mt-2">
+                                {stats.averageEfficiency < 100 ? 'Under par average' : 
+                                 stats.averageEfficiency === 100 ? 'Par average' : 'Over par average'}
+                            </Text>
+                        </View>
                     </View>
-                )}
+                </View>
 
                 {/* Score Over Time */}
                 <View className="px-6 mb-6">

@@ -10,9 +10,20 @@ const useRoundStore = create((set, get) => ({
   loading: false,
   error: null,
 
+  // Course-related state
+  availableCourses: [],
+  selectedCourse: null,
+  selectedTee: null,
+
   // Actions
-  startRound: async (courseName, totalHoles, holesConfig) => {
+  startRound: async () => {
     try {
+      const { selectedCourse, selectedTee } = get()
+      
+      if (!selectedCourse || !selectedTee) {
+        throw new Error('Please select a course and tee')
+      }
+      
       set({ loading: true, error: null })
       
       const { token } = authStore.getState()
@@ -24,9 +35,9 @@ const useRoundStore = create((set, get) => ({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          course_name: courseName,
-          total_holes: totalHoles,
-          holes_config: holesConfig
+          course_id: selectedCourse.id,
+          tee_id: selectedTee.id,
+          holes_config: selectedTee.holes
         })
       })
 
@@ -39,7 +50,9 @@ const useRoundStore = create((set, get) => ({
       set({ 
         currentRound: round, 
         currentHole: 1,
-        loading: false 
+        loading: false,
+        selectedCourse: null,
+        selectedTee: null
       })
       
       return round
@@ -326,7 +339,42 @@ const useRoundStore = create((set, get) => ({
     roundHistory: [],
     loading: false,
     error: null
-  })
+  }),
+
+  // Course-related actions
+  searchCourses: async (searchTerm) => {
+    try {
+      set({ loading: true, error: null })
+      
+      const { token } = authStore.getState()
+      
+      const response = await fetch(`${API_BASE_URL}/courses?search=${encodeURIComponent(searchTerm)}&use_meters=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to search courses')
+      }
+
+      const courses = await response.json()
+      set({ availableCourses: courses, loading: false })
+      
+      return courses
+    } catch (error) {
+      set({ error: error.message, loading: false })
+      throw error
+    }
+  },
+
+  setSelectedCourse: (course) => {
+    set({ selectedCourse: course, selectedTee: null })
+  },
+
+  setSelectedTee: (tee) => {
+    set({ selectedTee: tee })
+  },
 }))
 
 export default useRoundStore 

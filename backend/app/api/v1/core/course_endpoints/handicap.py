@@ -119,6 +119,15 @@ def update_user_handicap(db: Session, user_id: int) -> None:
     Implements USGA soft cap and hard cap rules:
     - Soft Cap: Increases beyond 3.0 strokes are reduced by 50%
     - Hard Cap: Maximum increase of 5.0 strokes in a 12-month period
+    
+    For users with initial handicap of 54 (new golfers):
+    - Start calculating after 3 rounds
+    - Use progressive system (1 best differential for 3-6 rounds, etc.)
+    
+    For users with initial handicap < 54 (experienced golfers):
+    - Keep initial handicap until 12 rounds are recorded
+    - Then use progressive system starting with 4 differentials
+    - Progress up to 8 differentials at 20 rounds
     """
     # Get last 20 rounds
     recent_rounds = get_last_20_rounds(db, user_id)
@@ -126,38 +135,89 @@ def update_user_handicap(db: Session, user_id: int) -> None:
     # Get all score differentials
     differentials = [round.score_differential for round in recent_rounds if round.score_differential is not None]
     
-    # Calculate new handicap index
-    new_handicap = calculate_handicap_index(differentials)
+    # Get user and their current handicap
+    user = db.query(Users).filter(Users.id == user_id).first()
+    current_handicap = float(user.handicap_index) if user.handicap_index is not None else None
     
-    if new_handicap is not None:
-        # Get user and their current handicap
-        user = db.query(Users).filter(Users.id == user_id).first()
-        current_handicap = user.handicap_index
+    # If no current handicap, can't proceed
+    if current_handicap is None:
+        return
         
-        if current_handicap is not None:
-            # Calculate the increase
-            increase = new_handicap - current_handicap
-            
-            if increase > 3.0:
-                # Apply soft cap - reduce any increase beyond 3.0 by 50%
-                excess_increase = increase - 3.0
-                reduced_excess = excess_increase * 0.5
-                new_handicap = current_handicap + 3.0 + reduced_excess
-            
-            if increase > 5.0:
-                # Apply hard cap - limit total increase to 5.0
-                new_handicap = current_handicap + 5.0
+    # Different logic based on whether user is a new golfer (handicap == 54) or experienced
+    is_new_golfer = current_handicap == 54.0
+    num_rounds = len(differentials)
+    
+    # For new golfers, need minimum 3 rounds
+    if is_new_golfer and num_rounds < 3:
+        return
         
-        # Update user's handicap
-        user.handicap_index = new_handicap
-        user.last_handicap_update = datetime.now(timezone.utc)
+    # For experienced golfers, wait until 12 rounds
+    if not is_new_golfer and num_rounds < 12:
+        return
         
-        # Update which rounds are included in handicap
-        sorted_differentials = sorted(differentials)[:8]  # Best 8 differentials
-        for round in recent_rounds:
-            round.included_in_handicap = (
-                round.score_differential is not None and 
-                round.score_differential in sorted_differentials
-            )
-        
-        db.commit() 
+    # Calculate number of differentials to use
+    if is_new_golfer:
+        # Progressive system for new golfers starting at 3 rounds
+        if num_rounds <= 6:
+            num_to_use = 1  # Use lowest differential
+        elif num_rounds <= 8:
+            num_to_use = 2  # Use lowest 2 differentials
+        elif num_rounds <= 11:
+            num_to_use = 3  # Use lowest 3 differentials
+        elif num_rounds <= 14:
+            num_to_use = 4  # Use lowest 4 differentials
+        elif num_rounds <= 16:
+            num_to_use = 5  # Use lowest 5 differentials
+        elif num_rounds <= 18:
+            num_to_use = 6  # Use lowest 6 differentials
+        elif num_rounds == 19:
+            num_to_use = 7  # Use lowest 7 differentials
+        else:
+            num_to_use = 8  # Use lowest 8 differentials
+    else:
+        # Progressive system for experienced golfers starting at 12 rounds
+        if num_rounds <= 14:
+            num_to_use = 4  # Start with 4 differentials
+        elif num_rounds <= 16:
+            num_to_use = 5  # Use lowest 5 differentials
+        elif num_rounds <= 18:
+            num_to_use = 6  # Use lowest 6 differentials
+        elif num_rounds == 19:
+            num_to_use = 7  # Use lowest 7 differentials
+        else:
+            num_to_use = 8  # Use lowest 8 differentials
+    
+    # Sort differentials and take best ones
+    sorted_differentials = sorted(differentials)
+    best_differentials = sorted_differentials[:num_to_use]
+    
+    # Calculate average and apply 96% multiplier
+    average = sum(best_differentials) / len(best_differentials)
+    new_handicap = round(average * 0.96, 1)
+    
+    # Apply caps only when handicap is increasing
+    increase = new_handicap - current_handicap
+    
+    if increase > 3.0:
+        # Apply soft cap - reduce any increase beyond 3.0 by 50%
+        excess_increase = increase - 3.0
+        reduced_excess = excess_increase * 0.5
+        new_handicap = current_handicap + 3.0 + reduced_excess
+    
+    if increase > 5.0:
+        # Apply hard cap - limit total increase to 5.0
+        new_handicap = current_handicap + 5.0
+    
+    # Update user's handicap
+    user.handicap_index = new_handicap
+    user.last_handicap_update = datetime.now(timezone.utc)
+    
+    # Update which rounds are included in handicap
+    sorted_differentials = sorted(differentials)[:num_to_use]  # Best differentials
+    for round in recent_rounds:
+        round.included_in_handicap = (
+            round.score_differential is not None and 
+            round.score_differential in sorted_differentials
+        )
+    
+    db.commit() 

@@ -52,6 +52,25 @@ export default function RoundHistory() {
     }
 
     const handleDeleteRound = (round) => {
+        // If round is not completed (active), show different alert
+        if (!round.is_completed) {
+            Alert.alert(
+                'Active Round',
+                'This round is currently in progress. Please go to the Caddie page and use the "End Round" button to end this round.',
+                [
+                    {
+                        text: 'Go to Caddie',
+                        onPress: () => router.push('/(dashboard)/caddie')
+                    },
+                    {
+                        text: 'Cancel',
+                        style: 'cancel'
+                    }
+                ]
+            )
+            return
+        }
+
         Alert.alert(
             'Delete Round',
             `Are you sure you want to delete your round at ${round.course_name}? This action cannot be undone.`,

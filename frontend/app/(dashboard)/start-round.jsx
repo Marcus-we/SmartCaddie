@@ -1,23 +1,45 @@
 import { useState, useEffect } from 'react'
-import { Text, View, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native'
+import { Text, View, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator, FlatList } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import useRoundStore from '../../store/roundStore'
 
 export default function StartRound() {
-    const [courseName, setCourseName] = useState('')
-    const [totalHoles, setTotalHoles] = useState(18)
-    const [loading, setLoading] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
+    const [searchTimeout, setSearchTimeout] = useState(null)
     
-    const { startRound, getActiveRound } = useRoundStore()
-
-    // No need to pre-configure holes anymore
+    const { 
+        startRound, 
+        getActiveRound, 
+        searchCourses,
+        availableCourses,
+        selectedCourse,
+        selectedTee,
+        setSelectedCourse,
+        setSelectedTee,
+        loading 
+    } = useRoundStore()
 
     // Check for active round on mount
     useEffect(() => {
         checkActiveRound()
     }, [])
+
+    // Handle search with debounce
+    useEffect(() => {
+        if (searchTimeout) {
+            clearTimeout(searchTimeout)
+        }
+        
+        if (searchTerm.trim()) {
+            const timeout = setTimeout(() => {
+                searchCourses(searchTerm)
+            }, 500)
+            
+            setSearchTimeout(timeout)
+        }
+    }, [searchTerm])
 
     const checkActiveRound = async () => {
         try {
@@ -48,35 +70,55 @@ export default function StartRound() {
         }
     }
 
-    // Remove hole par update function since we'll set par on the fly
-
     const handleStartRound = async () => {
-        if (!courseName.trim()) {
-            Alert.alert('Error', 'Please enter a course name')
+        if (!selectedCourse || !selectedTee) {
+            Alert.alert('Error', 'Please select a course and tee')
             return
         }
 
         try {
-            setLoading(true)
-            
-            // Create holes with default par 4 - user will set actual par as they play
-            const defaultHoles = Array.from({ length: totalHoles }, (_, index) => ({
-                hole_number: index + 1,
-                par: 4 // Default par that can be changed during play
-            }))
-            
-            await startRound(courseName.trim(), totalHoles, defaultHoles)
-            
-            // Navigate directly to caddie page
+            await startRound()
             router.push('/(dashboard)/caddie')
         } catch (error) {
             Alert.alert('Error', error.message)
-        } finally {
-            setLoading(false)
         }
     }
 
-    // Remove quick par and total par functions since we're not pre-configuring
+    const renderCourseItem = ({ item }) => (
+        <TouchableOpacity
+            onPress={() => setSelectedCourse(item)}
+            className={`p-4 border-b border-gray-200 ${
+                selectedCourse?.id === item.id ? 'bg-green-50' : ''
+            }`}
+        >
+            <Text className="text-lg font-semibold text-gray-900">{item.course_name}</Text>
+            <Text className="text-sm text-gray-600">{item.location}</Text>
+            <Text className="text-sm text-gray-600">{item.total_holes} holes</Text>
+        </TouchableOpacity>
+    )
+
+    const renderTeeItem = ({ item }) => (
+        <TouchableOpacity
+            onPress={() => setSelectedTee(item)}
+            className={`flex-1 p-4 m-1 rounded-lg border ${
+                selectedTee?.id === item.id
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-300'
+            }`}
+        >
+            <Text className={`text-center font-semibold ${
+                selectedTee?.id === item.id ? 'text-green-700' : 'text-gray-700'
+            }`}>
+                {item.tee_name}
+            </Text>
+            <Text className="text-center text-sm text-gray-600">
+                {item.total_distance_meters} meters
+            </Text>
+            <Text className="text-center text-sm text-gray-600">
+                Par {item.total_par}
+            </Text>
+        </TouchableOpacity>
+    )
 
     return (
         <SafeAreaView className="flex-1 bg-white" edges={['top']}>
@@ -94,109 +136,90 @@ export default function StartRound() {
                 <View className="w-10" />
             </View>
 
-            <ScrollView className="flex-1 p-4">
-                {/* Course Name */}
-                <View className="mb-6">
-                    <Text className="text-lg font-semibold text-gray-900 mb-2">Course Name</Text>
+            <View className="flex-1">
+                {/* Search Bar */}
+                <View className="p-4 border-b border-gray-200">
                     <TextInput
-                        value={courseName}
-                        onChangeText={setCourseName}
-                        placeholder="Enter course name"
+                        value={searchTerm}
+                        onChangeText={setSearchTerm}
+                        placeholder="Search for a golf course..."
                         className="border border-gray-300 rounded-lg px-4 py-3 text-base"
-                        maxLength={100}
                     />
                 </View>
 
-                {/* Number of Holes */}
-                <View className="mb-6">
-                    <Text className="text-lg font-semibold text-gray-900 mb-3">Number of Holes</Text>
-                    <View className="flex-row space-x-4">
-                        <TouchableOpacity
-                            onPress={() => setTotalHoles(9)}
-                            className={`flex-1 py-3 px-4 rounded-lg border-2 ${
-                                totalHoles === 9 
-                                    ? 'border-green-500 bg-green-50' 
-                                    : 'border-gray-300 bg-white'
-                            }`}
-                        >
-                            <Text className={`text-center font-semibold ${
-                                totalHoles === 9 ? 'text-green-700' : 'text-gray-700'
-                            }`}>
-                                9 Holes
-                            </Text>
-                        </TouchableOpacity>
-                        
-                        <TouchableOpacity
-                            onPress={() => setTotalHoles(18)}
-                            className={`flex-1 py-3 px-4 rounded-lg border-2 ${
-                                totalHoles === 18 
-                                    ? 'border-green-500 bg-green-50' 
-                                    : 'border-gray-300 bg-white'
-                            }`}
-                        >
-                            <Text className={`text-center font-semibold ${
-                                totalHoles === 18 ? 'text-green-700' : 'text-gray-700'
-                            }`}>
-                                18 Holes
-                            </Text>
-                        </TouchableOpacity>
+                {loading ? (
+                    <View className="flex-1 justify-center items-center">
+                        <ActivityIndicator size="large" color="#10B981" />
                     </View>
-                </View>
+                ) : (
+                    <>
+                        {/* Course List */}
+                        {!selectedCourse ? (
+                            <FlatList
+                                data={availableCourses}
+                                renderItem={renderCourseItem}
+                                keyExtractor={item => item.id.toString()}
+                                className="flex-1"
+                            />
+                        ) : (
+                            // Tee Selection
+                            <View className="flex-1 p-4">
+                                <View className="mb-4">
+                                    <Text className="text-lg font-semibold text-gray-900 mb-2">
+                                        Selected Course
+                                    </Text>
+                                    <View className="bg-gray-50 p-4 rounded-lg">
+                                        <Text className="text-lg font-semibold text-gray-900">
+                                            {selectedCourse.course_name}
+                                        </Text>
+                                        <Text className="text-sm text-gray-600">
+                                            {selectedCourse.location}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => setSelectedCourse(null)}
+                                        className="mt-2"
+                                    >
+                                        <Text className="text-blue-600">Change Course</Text>
+                                    </TouchableOpacity>
+                                </View>
 
-                {/* How It Works */}
-                <View className="mb-6">
-                    <Text className="text-lg font-semibold text-gray-900 mb-3">How It Works</Text>
-                    <View className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                        <View className="space-y-3">
-                            <View className="flex-row items-start">
-                                <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center mr-3 mt-0.5">
-                                    <Text className="text-white font-bold text-sm">1</Text>
-                                </View>
-                                <Text className="text-blue-800 flex-1">
-                                    Start your round with just the course name and number of holes
+                                <Text className="text-lg font-semibold text-gray-900 mb-2">
+                                    Select Tee
                                 </Text>
+                                <FlatList
+                                    data={selectedCourse.tees}
+                                    renderItem={renderTeeItem}
+                                    keyExtractor={item => item.id.toString()}
+                                    numColumns={2}
+                                    className="flex-1"
+                                />
                             </View>
-                            
-                            <View className="flex-row items-start">
-                                <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center mr-3 mt-0.5">
-                                    <Text className="text-white font-bold text-sm">2</Text>
-                                </View>
-                                <Text className="text-blue-800 flex-1">
-                                    Set the par for each hole as you play (default is Par 4)
-                                </Text>
-                            </View>
-                            
-                            <View className="flex-row items-start">
-                                <View className="w-6 h-6 bg-blue-500 rounded-full items-center justify-center mr-3 mt-0.5">
-                                    <Text className="text-white font-bold text-sm">3</Text>
-                                </View>
-                                <Text className="text-blue-800 flex-1">
-                                    Track your shots and save scores hole by hole
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
+                        )}
 
-                {/* Start Round Button */}
-                <TouchableOpacity
-                    onPress={handleStartRound}
-                    disabled={loading || !courseName.trim()}
-                    className={`py-4 px-6 rounded-lg ${
-                        loading || !courseName.trim()
-                            ? 'bg-gray-300'
-                            : 'bg-green-600'
-                    }`}
-                >
-                    {loading ? (
-                        <ActivityIndicator color="white" />
-                    ) : (
-                        <Text className="text-white text-center text-lg font-bold">
-                            Start Round
-                        </Text>
-                    )}
-                </TouchableOpacity>
-            </ScrollView>
+                        {/* Start Round Button */}
+                        {selectedCourse && selectedTee && (
+                            <View className="p-4">
+                                <TouchableOpacity
+                                    onPress={handleStartRound}
+                                    disabled={loading}
+                                    className={`py-4 px-6 rounded-lg ${
+                                        loading ? 'bg-gray-300' : 'bg-green-600'
+                                    }`}
+                                >
+                                    {loading ? (
+                                        <ActivityIndicator color="white" />
+                                    ) : (
+                                        <Text className="text-white text-center text-lg font-bold">
+                                            Start Round
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </>
+                )}
+            </View>
         </SafeAreaView>
     )
 } 

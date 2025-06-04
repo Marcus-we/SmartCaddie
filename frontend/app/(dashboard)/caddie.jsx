@@ -8,6 +8,7 @@ import { router } from 'expo-router'
 import authStore from '../../store/authStore'
 import useRoundStore from '../../store/roundStore'
 import { API_BASE_URL } from '../../config/api'
+import { formatHandicapIndex } from '../utils/formatters'
 
 const { width, height } = Dimensions.get('window')
 
@@ -25,7 +26,9 @@ export default function SmartCaddie() {
         previousHole,
         setCurrentHole,
         getActiveRound,
-        completeRound
+        completeRound,
+        reset,
+        deleteRound
     } = useRoundStore()
     
     // Location and Map State
@@ -55,13 +58,15 @@ export default function SmartCaddie() {
         divot: false,
         bunker: false,
         
-        // Slope conditions (can combine)
+        // Slope direction conditions (uphill/downhill - only one can be selected)
         uphill: false,
         downhill: false,
+        
+        // Ball position relative to feet (above/below - only one can be selected)
         ball_above_feet: false,
         ball_below_feet: false,
         
-        // Ground conditions (can combine)
+        // Ground conditions (only one can be selected)
         wet_ground: false,
         firm_ground: false
     })
@@ -167,35 +172,30 @@ export default function SmartCaddie() {
         }
     }
 
-    const updateCurrentHolePar = async (newPar) => {
-        if (!currentRound) return
-        
-        try {
-            // Update the hole with current shots and new par
-            await updateHoleScore(currentHole, getCurrentHoleShots(), newPar)
-        } catch (error) {
-            Alert.alert('Error', 'Failed to update par: ' + error.message)
-        }
-    }
-
     const toggleMapType = () => {
         setMapType(prev => prev === 'satellite' ? 'standard' : 'satellite')
     }
 
     const handleCompleteRound = async () => {
         if (!currentRound) {
-            Alert.alert('No Active Round', 'No round to complete.')
+            Alert.alert('No Active Round', 'Please start a round first.')
             return
         }
 
         try {
             setCompletingRound(true)
             
-            await completeRound(roundNotes.trim() || null)
+            const completedRound = await completeRound(roundNotes.trim() || null)
+            const { userData } = authStore.getState()
+            
+            // Show completion message with handicap update if available
+            const message = completedRound.score_differential !== null
+                ? `Your round at ${currentRound.course_name} has been completed and saved.`
+                : `Your round at ${currentRound.course_name} has been completed and saved.`
             
             Alert.alert(
                 'Round Completed!',
-                `Your round at ${currentRound.course_name} has been completed and saved.`,
+                message,
                 [
                     {
                         text: 'View History',
@@ -224,13 +224,24 @@ export default function SmartCaddie() {
     const confirmCompleteRound = () => {
         if (!currentRound) return
 
+        // Check if any shots have been recorded
+        const totalShots = getTotalShots()
+        if (totalShots === 0) {
+            Alert.alert(
+                'No Shots Recorded',
+                'You cannot complete a round without recording any shots. Please record at least one shot before completing the round.',
+                [{ text: 'OK' }]
+            )
+            return
+        }
+
         // Check if all holes have been played
         const unplayedHoles = currentRound.hole_scores.filter(hole => hole.shots === 0)
         
         if (unplayedHoles.length > 0) {
             Alert.alert(
                 'Incomplete Round',
-                `You have ${unplayedHoles.length} hole(s) with no shots recorded. Are you sure you want to complete the round?`,
+                `You have ${unplayedHoles.length} hole(s) with no shots recorded. If you complete the round now, it will not count towards your handicap calculation. Would you like to continue?`,
                 [
                     { text: 'Cancel', style: 'cancel' },
                     { 
@@ -372,15 +383,73 @@ export default function SmartCaddie() {
         if (!weather || !weather.windDirection) return 0
         
         // Wind direction is where wind is coming FROM
+        // But we want to show where wind is blowing TO (opposite direction)
         // Device heading is where device is pointing TO
-        // We want to show wind direction relative to device orientation
-        let relativeDirection = weather.windDirection - deviceHeading
+        // We want to show wind flow direction relative to device orientation
+        const windBlowingTo = (weather.windDirection + 180) % 360 // Opposite of where it's coming from
+        let relativeDirection = windBlowingTo - deviceHeading
         
         // Normalize to 0-360 range
         if (relativeDirection < 0) relativeDirection += 360
         if (relativeDirection >= 360) relativeDirection -= 360
         
         return relativeDirection
+    }
+
+    // Calculate bearing from player to target
+    const calculateBearing = (point1, point2) => {
+        const lat1 = point1.latitude * Math.PI / 180
+        const lat2 = point2.latitude * Math.PI / 180
+        const deltaLon = (point2.longitude - point1.longitude) * Math.PI / 180
+
+        const y = Math.sin(deltaLon) * Math.cos(lat2)
+        const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon)
+
+        let bearing = Math.atan2(y, x) * 180 / Math.PI
+        
+        // Normalize to 0-360 range
+        bearing = (bearing + 360) % 360
+        
+        return bearing
+    }
+
+    // Calculate wind direction relative to shot direction for backend
+    const getWindDirectionForShot = () => {
+        if (!weather || !weather.windDirection || !playerPosition || !targetPosition) {
+            return 'headwind' // Default fallback
+        }
+
+        // Calculate the bearing from player to target (shot direction)
+        const shotBearing = calculateBearing(playerPosition, targetPosition)
+        
+        // Wind direction is where wind is coming FROM
+        // Shot bearing is where we're shooting TO
+        // Calculate the angle between wind source and shot direction
+        let windAngle = weather.windDirection - shotBearing
+        
+        // Normalize to -180 to 180 range for easier calculation
+        while (windAngle > 180) windAngle -= 360
+        while (windAngle < -180) windAngle += 360
+        
+        // Determine wind type based on angle
+        const absAngle = Math.abs(windAngle)
+        
+        let windType
+        if (absAngle <= 45) {
+            // Wind is coming from the same direction we're shooting (0° ± 45°) - headwind
+            windType = 'headwind'
+        } else if (absAngle >= 135) {
+            // Wind is coming from opposite direction we're shooting (180° ± 45°) - tailwind  
+            windType = 'tailwind'
+        } else if (windAngle > 0) {
+            // Wind is coming from the right side relative to shot direction (45° to 135°)
+            windType = 'crosswind-right'
+        } else {
+            // Wind is coming from the left side relative to shot direction (-45° to -135°)
+            windType = 'crosswind-left'
+        }
+
+        return windType
     }
 
     // Wind Arrow Component
@@ -485,7 +554,43 @@ export default function SmartCaddie() {
         }))
     }
 
-    // Helper function to handle slope/ground conditions (can combine)
+    // Helper function to handle slope direction conditions (uphill/downhill - only one can be active)
+    const handleSlopeDirectionCondition = (condition) => {
+        setShotConditions(prev => ({
+            ...prev,
+            // Reset slope direction conditions
+            uphill: false,
+            downhill: false,
+            // Set the selected one to true, or false if it was already selected (to deselect)
+            [condition]: prev[condition] ? false : true
+        }))
+    }
+
+    // Helper function to handle ball position relative to feet (above/below - only one can be active)
+    const handleBallPositionCondition = (condition) => {
+        setShotConditions(prev => ({
+            ...prev,
+            // Reset ball position conditions
+            ball_above_feet: false,
+            ball_below_feet: false,
+            // Set the selected one to true, or false if it was already selected (to deselect)
+            [condition]: prev[condition] ? false : true
+        }))
+    }
+
+    // Helper function to handle ground conditions (only one can be active)
+    const handleGroundCondition = (condition) => {
+        setShotConditions(prev => ({
+            ...prev,
+            // Reset all ground conditions
+            wet_ground: false,
+            firm_ground: false,
+            // Set the selected one to true, or false if it was already selected (to deselect)
+            [condition]: prev[condition] ? false : true
+        }))
+    }
+
+    // Helper function to handle slope/ground conditions (can combine) - DEPRECATED, keeping for backwards compatibility
     const handleToggleCondition = (condition) => {
         setShotConditions(prev => ({
             ...prev,
@@ -525,7 +630,7 @@ export default function SmartCaddie() {
             // Prepare data for your backend API (matching AgentQueryRequest schema)
             const requestData = {
                 wind_speed: weather.windSpeed, // Already in m/s
-                wind_direction: getWindDirection(weather.windDirection),
+                wind_direction: getWindDirectionForShot(), // Use shot-relative wind direction
                 distance_to_flag: distance, // Already in meters
                 // Use shot conditions from state
                 ...shotConditions
@@ -610,6 +715,37 @@ export default function SmartCaddie() {
         } finally {
             setFeedbackLoading(false)
         }
+    }
+
+    const handleEndRound = () => {
+        if (!currentRound) return
+
+        Alert.alert(
+            'End Round',
+            'Are you sure you want to end this round? Any saved scores will be discarded and this round will not count towards your handicap.',
+            [
+                {
+                    text: 'Cancel',
+                    style: 'cancel'
+                },
+                {
+                    text: 'End Round',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            // Delete the round from the database
+                            await deleteRound(currentRound.id)
+                            // Reset the round store which clears the current round
+                            reset()
+                            // Navigate back to start round
+                            router.push('/(dashboard)/start-round')
+                        } catch (error) {
+                            Alert.alert('Error', 'Failed to end round: ' + error.message)
+                        }
+                    }
+                }
+            ]
+        )
     }
 
     if (locationLoading) {
@@ -703,14 +839,24 @@ export default function SmartCaddie() {
                             <Text className="text-md text-gray-600 font-bold">
                                 {currentRound.course_name}
                             </Text>
-                            <TouchableOpacity
-                                onPress={() => setShowShotModal(true)}
-                                className="bg-green-600 rounded-xl px-4 py-2"
-                            >
-                                <Text className="text-white font-bold text-sm">
-                                    Track Score
-                                </Text>
-                            </TouchableOpacity>
+                            <View className="flex-col gap-2">
+                                <TouchableOpacity
+                                    onPress={() => setShowShotModal(true)}
+                                    className="bg-green-600 rounded-xl px-4 py-2"
+                                >
+                                    <Text className="text-white font-bold text-sm">
+                                        Track Score
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleEndRound}
+                                    className="bg-red-500 rounded-xl px-4 py-2"
+                                >
+                                    <Text className="text-white font-bold text-sm">
+                                        End Round
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                         
                         <View className="bg-green-50 rounded-xl p-3 border border-green-200 w-[25%]">
@@ -988,21 +1134,19 @@ export default function SmartCaddie() {
                                 ))}
                             </View>
 
-                            {/* Slope Conditions */}
+                            {/* Slope Direction Conditions */}
                             <Text className="text-xl font-bold text-green-900 mb-4">
-                                Slope Conditions (optional)
+                                Slope Direction (select one)
                             </Text>
                             
                             <View className="bg-white rounded-2xl p-4 shadow-sm mb-6">
                                 {[
                                     { key: 'uphill', label: 'Uphill Lie', icon: 'trending-up', description: 'Ball is on an upward slope' },
-                                    { key: 'downhill', label: 'Downhill Lie', icon: 'trending-down', description: 'Ball is on a downward slope' },
-                                    { key: 'ball_above_feet', label: 'Ball Above Feet', icon: 'arrow-up', description: 'Ball is higher than your feet' },
-                                    { key: 'ball_below_feet', label: 'Ball Below Feet', icon: 'arrow-down', description: 'Ball is lower than your feet' }
+                                    { key: 'downhill', label: 'Downhill Lie', icon: 'trending-down', description: 'Ball is on a downward slope' }
                                 ].map((condition) => (
                                     <TouchableOpacity
                                         key={condition.key}
-                                        onPress={() => handleToggleCondition(condition.key)}
+                                        onPress={() => handleSlopeDirectionCondition(condition.key)}
                                         className={`flex-row items-center p-4 rounded-xl mb-2 ${
                                             shotConditions[condition.key] ? 'bg-blue-100 border-2 border-blue-500' : 'bg-gray-50'
                                         }`}
@@ -1033,9 +1177,52 @@ export default function SmartCaddie() {
                                 ))}
                             </View>
 
+                            {/* Ball Position Relative to Feet */}
+                            <Text className="text-xl font-bold text-green-900 mb-4">
+                                Ball Position (select one)
+                            </Text>
+                            
+                            <View className="bg-white rounded-2xl p-4 shadow-sm mb-6">
+                                {[
+                                    { key: 'ball_above_feet', label: 'Ball Above Feet', icon: 'arrow-up', description: 'Ball is higher than your feet' },
+                                    { key: 'ball_below_feet', label: 'Ball Below Feet', icon: 'arrow-down', description: 'Ball is lower than your feet' }
+                                ].map((condition) => (
+                                    <TouchableOpacity
+                                        key={condition.key}
+                                        onPress={() => handleBallPositionCondition(condition.key)}
+                                        className={`flex-row items-center p-4 rounded-xl mb-2 ${
+                                            shotConditions[condition.key] ? 'bg-purple-100 border-2 border-purple-500' : 'bg-gray-50'
+                                        }`}
+                                    >
+                                        <View className={`w-10 h-10 rounded-full items-center justify-center mr-4 ${
+                                            shotConditions[condition.key] ? 'bg-purple-500' : 'bg-gray-300'
+                                        }`}>
+                                            <Ionicons 
+                                                name={condition.icon} 
+                                                size={20} 
+                                                color={shotConditions[condition.key] ? 'white' : '#6B7280'} 
+                                            />
+                                        </View>
+                                        <View className="flex-1">
+                                            <Text className={`font-semibold ${
+                                                shotConditions[condition.key] ? 'text-purple-900' : 'text-gray-900'
+                                            }`}>
+                                                {condition.label}
+                                            </Text>
+                                            <Text className="text-gray-600 text-sm">
+                                                {condition.description}
+                                            </Text>
+                                        </View>
+                                        {shotConditions[condition.key] && (
+                                            <Ionicons name="checkmark-circle" size={24} color="#8B5CF6" />
+                                        )}
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
                             {/* Ground Conditions */}
                             <Text className="text-xl font-bold text-green-900 mb-4">
-                                Ground Conditions (optional)
+                                Ground Conditions (select one)
                             </Text>
                             
                             <View className="bg-white rounded-2xl p-4 shadow-sm mb-6">
@@ -1045,7 +1232,7 @@ export default function SmartCaddie() {
                                 ].map((condition) => (
                                     <TouchableOpacity
                                         key={condition.key}
-                                        onPress={() => handleToggleCondition(condition.key)}
+                                        onPress={() => handleGroundCondition(condition.key)}
                                         className={`flex-row items-center p-4 rounded-xl mb-2 ${
                                             shotConditions[condition.key] ? 'bg-orange-100 border-2 border-orange-500' : 'bg-gray-50'
                                         }`}
@@ -1353,29 +1540,10 @@ export default function SmartCaddie() {
 
                                     {/* Par Selection */}
                                     <View className="mb-8">
-                                        <View className="flex-row gap-2">
-                                            {[3, 4, 5].map(par => (
-                                                <TouchableOpacity
-                                                    key={par}
-                                                    onPress={() => updateCurrentHolePar(par)}
-                                                    className={`flex-1 p-2 rounded-xl items-center ${
-                                                        getCurrentHolePar() === par 
-                                                            ? 'bg-green-600' 
-                                                            : 'bg-green-50 border border-green-200'
-                                                    }`}
-                                                >
-                                                    <Text className={`text-2xl font-bold ${
-                                                        getCurrentHolePar() === par ? 'text-white' : 'text-green-700'
-                                                    }`}>
-                                                        {par}
-                                                    </Text>
-                                                    <Text className={`text-sm font-medium mt-1 ${
-                                                        getCurrentHolePar() === par ? 'text-green-100' : 'text-green-600'
-                                                    }`}>
-                                                        Par {par}
-                                                    </Text>
-                                                </TouchableOpacity>
-                                            ))}
+                                        <View className="flex-row items-center justify-center">
+                                            <Text className="text-2xl font-bold text-green-900">
+                                                Par {getCurrentHolePar()}
+                                            </Text>
                                         </View>
                                     </View>
 
@@ -1461,37 +1629,40 @@ export default function SmartCaddie() {
                                                 confirmCompleteRound()
                                                 setShowShotModal(false)
                                             }}
-                                            className="py-4 rounded-xl bg-green-700"
+                                            className={`py-4 rounded-xl ${
+                                                getTotalShots() === 0 ? 'bg-gray-400' : 'bg-green-700'
+                                            }`}
+                                            disabled={getTotalShots() === 0}
                                         >
                                             <Text className="text-white text-center font-bold text-lg">
                                                 Complete Round
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
-                                                                 </View>
-                             </View>
-                         ) : (
-                             <View className="px-6 py-6">
-                                 <View className="bg-white rounded-2xl p-6 shadow-sm items-center">
-                                     <Ionicons name="golf-outline" size={64} color="#059669" />
-                                     <Text className="text-green-900 text-xl font-bold mt-4 text-center">
-                                         No Active Round
-                                     </Text>
-                                     <Text className="text-green-700 mt-2 text-center">
-                                         Start a new round to begin tracking your scores
-                                     </Text>
-                                     <TouchableOpacity 
-                                         onPress={() => {
-                                             setShowShotModal(false)
-                                             router.push('/(dashboard)/start-round')
-                                         }}
-                                         className="bg-green-600 rounded-xl px-6 py-3 mt-6"
-                                     >
-                                         <Text className="text-white font-bold">Start New Round</Text>
-                                     </TouchableOpacity>
-                                 </View>
-                             </View>
-                         )}
+                                </View>
+                            </View>
+                        ) : (
+                            <View className="px-6 py-6">
+                                <View className="bg-white rounded-2xl p-6 shadow-sm items-center">
+                                    <Ionicons name="golf-outline" size={64} color="#059669" />
+                                    <Text className="text-green-900 text-xl font-bold mt-4 text-center">
+                                        No Active Round
+                                    </Text>
+                                    <Text className="text-green-700 mt-2 text-center">
+                                        Start a new round to begin tracking your scores
+                                    </Text>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setShowShotModal(false)
+                                            router.push('/(dashboard)/start-round')
+                                        }}
+                                        className="bg-green-600 rounded-xl px-6 py-3 mt-6"
+                                    >
+                                        <Text className="text-white font-bold">Start New Round</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
                     </ScrollView>
                 </SafeAreaView>
             </Modal>
@@ -1572,6 +1743,15 @@ export default function SmartCaddie() {
                                                      `${getScoreRelativeToPar()}`}
                                                 </Text>
                                             </View>
+                                            
+                                            {/* Handicap Eligibility Warning */}
+                                            {currentRound.hole_scores.some(hole => hole.shots === 0) && (
+                                                <View className="mt-4 bg-yellow-50 rounded-lg p-3">
+                                                    <Text className="text-yellow-800 text-sm">
+                                                        Note: This round will not count towards your handicap because some holes are incomplete.
+                                                    </Text>
+                                                </View>
+                                            )}
                                         </View>
                                     </View>
                                 )}
