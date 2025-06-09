@@ -200,7 +200,8 @@ async def get_round_history(
     """Get user's round history"""
     
     rounds = db.query(Rounds).filter(
-        Rounds.user_id == current_user.id
+        Rounds.user_id == current_user.id,
+        Rounds.is_completed == True
     ).order_by(desc(Rounds.start_time)).offset(offset).limit(limit).all()
     
     return rounds
