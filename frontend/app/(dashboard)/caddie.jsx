@@ -9,6 +9,7 @@ import authStore from '../../store/authStore'
 import useRoundStore from '../../store/roundStore'
 import { API_BASE_URL } from '../../config/api'
 import { formatHandicapIndex } from '../utils/formatters'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 const { width, height } = Dimensions.get('window')
 
@@ -31,12 +32,13 @@ export default function SmartCaddie() {
         deleteRound
     } = useRoundStore()
     
+    const insets = useSafeAreaInsets()
+    
     // Location and Map State
     const [playerPosition, setPlayerPosition] = useState(null)
     const [targetPosition, setTargetPosition] = useState(null)
     const [distance, setDistance] = useState(0)
     const [mapRegion, setMapRegion] = useState(null)
-    const [mapType, setMapType] = useState('satellite') // 'satellite' or 'standard'
     
     // Weather State
     const [weather, setWeather] = useState(null)
@@ -172,10 +174,6 @@ export default function SmartCaddie() {
         }
     }
 
-    const toggleMapType = () => {
-        setMapType(prev => prev === 'satellite' ? 'standard' : 'satellite')
-    }
-
     const handleCompleteRound = async () => {
         if (!currentRound) {
             Alert.alert('No Active Round', 'Please start a round first.')
@@ -186,34 +184,19 @@ export default function SmartCaddie() {
             setCompletingRound(true)
             
             const completedRound = await completeRound(roundNotes.trim() || null)
-            const { userData } = authStore.getState()
             
-            // Show completion message with handicap update if available
-            const message = completedRound.score_differential !== null
-                ? `Your round at ${currentRound.course_name} has been completed and saved.`
-                : `Your round at ${currentRound.course_name} has been completed and saved.`
+            // Reset local state before navigation
+            setShowCompleteRoundModal(false)
+            setRoundNotes('')
+            setTargetPosition(null)
+            setDistance(0)
             
-            Alert.alert(
-                'Round Completed!',
-                message,
-                [
-                    {
-                        text: 'View History',
-                        onPress: () => {
-                            setShowCompleteRoundModal(false)
-                            setRoundNotes('')
-                            router.push('/(dashboard)/round-history')
-                        }
-                    },
-                    {
-                        text: 'OK',
-                        onPress: () => {
-                            setShowCompleteRoundModal(false)
-                            setRoundNotes('')
-                        }
-                    }
-                ]
-            )
+            // Ensure all state is cleaned up before navigation
+            await reset()
+            
+            // Use replace instead of push to avoid navigation stack issues
+            router.replace('/(dashboard)')
+            
         } catch (error) {
             Alert.alert('Error', 'Failed to complete round: ' + error.message)
         } finally {
@@ -256,6 +239,25 @@ export default function SmartCaddie() {
         }
     }
 
+    // Add function to calculate forward position
+    const calculateForwardPosition = (position, heading, distance) => {
+        // Convert heading to radians (heading is in degrees)
+        const headingRad = (heading * Math.PI) / 180;
+        
+        // Calculate offset (basic trigonometry)
+        const latOffset = Math.cos(headingRad) * distance;
+        const lonOffset = Math.sin(headingRad) * distance;
+        
+        // Convert to approximate lat/lon offsets
+        const metersPerLat = 111111; // Approximate meters per degree of latitude
+        const metersPerLon = 111111 * Math.cos(position.latitude * Math.PI / 180);
+        
+        return {
+            latitude: position.latitude + (latOffset / metersPerLat),
+            longitude: position.longitude + (lonOffset / metersPerLon)
+        };
+    }
+
     const getCurrentLocation = async () => {
         try {
             setLocationLoading(true)
@@ -283,10 +285,14 @@ export default function SmartCaddie() {
             }
 
             setPlayerPosition(position)
+            
+            // Update map region with forward-facing position
+            const forwardPosition = calculateForwardPosition(position, deviceHeading, 100)
             setMapRegion({
-                ...position,
-                latitudeDelta: 0.005, // Zoom level for golf course view
-                longitudeDelta: 0.005,
+                ...forwardPosition,
+                latitudeDelta: 0.003,
+                longitudeDelta: 0.003,
+                heading: deviceHeading,
             })
 
         } catch (error) {
@@ -525,9 +531,7 @@ export default function SmartCaddie() {
         
         const dist = calculateDistance(playerPosition, target)
         setDistance(dist)
-        
-        // Clear previous recommendation
-        setRecommendation(null)
+
         
         // Show conditions modal after a short delay, but only if not shown for this shot yet
         if (!conditionsModalShown) {
@@ -737,8 +741,8 @@ export default function SmartCaddie() {
                             await deleteRound(currentRound.id)
                             // Reset the round store which clears the current round
                             reset()
-                            // Navigate back to start round
-                            router.push('/(dashboard)/start-round')
+                            // Navigate back to caddie
+                            router.push('/(dashboard)/caddie')
                         } catch (error) {
                             Alert.alert('Error', 'Failed to end round: ' + error.message)
                         }
@@ -778,34 +782,108 @@ export default function SmartCaddie() {
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-green-50" edges={['top']}>
-            {/* Header with Weather */}
-            <View className="px-4 pt-2 pb-3 bg-white shadow-sm">
-                <View className="flex-row items-center justify-between">
-                    <View>
-                        <Text className="text-lg font-bold text-green-900">
-                            Smart Caddie
-                        </Text>
-                        <Text className="text-green-700 text-sm">
-                            Tap map to select target
-                        </Text>
-                    </View>
-                    
-                    {weather && (
-                        <View className="items-end">
-                            <View className="flex-row items-center space-x-3">
-                                <View className="items-end">
-                                    <Text className="text-lg font-bold text-green-600">
-                                        {weather.temperature}°C
-                                    </Text>
-                                    <Text className="text-gray-600 text-sm">
-                                        {weather.windSpeed}m/s {getWindDirection(weather.windDirection)}
+        <SafeAreaView className="flex-1" edges={['top']}>
+            {/* Map as main background */}
+            <View className="flex-1">
+                <MapView
+                    style={{ 
+                        width, 
+                        height: height - insets.bottom - 49  // 49 is the default tab bar height
+                    }}
+                    region={mapRegion}
+                    onPress={handleMapPress}
+                    showsUserLocation={false}
+                    showsMyLocationButton={false}
+                    showsCompass={false}
+                    mapType="standard"
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    rotateEnabled={false}
+                    pitchEnabled={false}
+                    camera={{
+                        center: playerPosition ? calculateForwardPosition(playerPosition, deviceHeading, 100) : mapRegion,
+                        pitch: 45,
+                        heading: deviceHeading,
+                        altitude: 300,
+                        zoom: 18
+                    }}
+                >
+                    {/* Map contents remain the same */}
+                    <WindArrow />
+
+                    {playerPosition && (
+                        <Marker
+                            coordinate={playerPosition}
+                            pinColor="blue"
+                            zIndex={500}
+                        >
+                            <View className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white" />
+                        </Marker>
+                    )}
+
+                    {targetPosition && (
+                        <Marker
+                            coordinate={targetPosition}
+                            pinColor="red"
+                        >
+                            <View className="items-center">
+                                <View className="w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
+                                <View className="mt-1 px-2 py-1 bg-white/70 backdrop-blur-sm rounded-lg border border-gray-200">
+                                    <Text className="text-sm font-bold text-gray-900">
+                                        {distance}m
                                     </Text>
                                 </View>
-                                
-                                {/* Mini Compass */}
-                                <View className="items-center justify-center relative pl-2">
-                                    <View className="w-12 h-12 items-center justify-center bg-gray-50 rounded-full border border-gray-200 shadow-sm">
+                            </View>
+                        </Marker>
+                    )}
+
+                    {playerPosition && targetPosition && (
+                        <Polyline
+                            coordinates={[playerPosition, targetPosition]}
+                            strokeColor="#059669"
+                            strokeWidth={3}
+                            lineDashPattern={[5, 5]}
+                        />
+                    )}
+                </MapView>
+
+                {/* Floating Controls at the top */}
+                <View className="absolute top-0 left-0 right-0 px-4 pt-2 pb-3">
+                    <View className="flex-row items-start justify-between">
+                        {currentRound ? (
+                            <View className="flex-col gap-2">
+                                <TouchableOpacity
+                                    onPress={() => setShowShotModal(true)}
+                                    className="bg-green-600/90 backdrop-blur-sm rounded-xl px-4 py-2"
+                                >
+                                    <Text className="text-white font-bold text-sm">
+                                        Track Score
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={handleEndRound}
+                                    className="bg-red-500/90 backdrop-blur-sm rounded-xl px-4 py-2"
+                                >
+                                    <Text className="text-white font-bold text-sm">
+                                        End Round
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity
+                                onPress={() => router.push('/(dashboard)/start-round')}
+                                className="bg-green-600/90 backdrop-blur-sm rounded-xl px-6 py-3"
+                            >
+                                <Text className="text-white font-bold text-center">
+                                    Start Round
+                                </Text>
+                            </TouchableOpacity>
+                        )}
+
+                        {weather && (
+                            <View className="items-end">
+                                <View className="items-center justify-center">
+                                    <View className="w-12 h-12 items-center justify-center bg-white/70 backdrop-blur-sm rounded-full border border-gray-200">
                                         <View 
                                             className="w-10 h-10 items-center justify-center"
                                             style={{
@@ -819,173 +897,70 @@ export default function SmartCaddie() {
                                             />
                                         </View>
                                     </View>
-                                    <Text className="text-xs text-gray-500 mt-1 font-medium">
-                                        Wind
-                                    </Text>
+                                    <View className="flex-row items-center mt-1">
+                                        <Text className="text-xs text-gray-700 font-medium mr-1">
+                                            Wind
+                                        </Text>
+                                        <Text className="text-xs text-gray-700 font-medium">
+                                            {weather.windSpeed}m/s
+                                        </Text>
+                                    </View>
                                 </View>
-                            </View>
-                        </View>
-                    )}
-                    
-                    {weatherLoading && (
-                        <ActivityIndicator size="small" color="#059669" />
-                    )}
-                </View>
-                
-                {/* Round Info - Highlight Hole and Par */}
-                {currentRound ? (
-                    <View className="mt-3 pt-3 border-t border-gray-200">
-                        <View className="flex-row items-center justify-between mb-3">
-                            <Text className="text-md text-gray-600 font-bold">
-                                {currentRound.course_name}
-                            </Text>
-                            <View className="flex-col gap-2">
-                                <TouchableOpacity
-                                    onPress={() => setShowShotModal(true)}
-                                    className="bg-green-600 rounded-xl px-4 py-2"
-                                >
-                                    <Text className="text-white font-bold text-sm">
-                                        Track Score
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    onPress={handleEndRound}
-                                    className="bg-red-500 rounded-xl px-4 py-2"
-                                >
-                                    <Text className="text-white font-bold text-sm">
-                                        End Round
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                        
-                        <View className="bg-green-50 rounded-xl p-3 border border-green-200 w-[25%]">
-                            <View className="flex-row items-center space-x-6">
-                                <View className="items-center">
-                                    <Text className="text-green-700 font-semibold text-xs pr-2">
-                                        HOLE
-                                    </Text>
-                                    <Text className="text-green-900 font-bold text-2xl">
-                                        {currentHole}
-                                    </Text>
-                                </View>
-                                
-                                <View className="w-px h-10 bg-green-300" />
-                                
-                                <View className="items-center">
-                                    <Text className="text-green-700 font-semibold text-xs pl-2">
-                                        PAR
-                                    </Text>
-                                    <Text className="text-green-900 font-bold text-2xl">
-                                        {getCurrentHolePar()}
-                                    </Text>
-                                </View>
-                            </View>
-                        </View>
-                    </View>
-                ) : (
-                    <View className="mt-3 pt-3 border-t border-gray-200">
-                        <TouchableOpacity
-                            onPress={() => router.push('/(dashboard)/start-round')}
-                            className="bg-green-600 rounded-xl px-6 py-3"
-                        >
-                            <Text className="text-white font-bold text-center">
-                                Start Round
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </View>
 
-            {/* Map */}
-            <View className="flex-1">
-                <MapView
-                    style={{ width, height: height * 0.6 }}
-                    region={mapRegion}
-                    onPress={handleMapPress}
-                    showsUserLocation={false} // We'll use custom marker
-                    showsMyLocationButton={false}
-                    mapType={mapType} // Toggle between satellite and standard
-                >
-                    {/* Wind Direction Arrow */}
-                    <WindArrow />
-
-                    {/* Player Position */}
-                    {playerPosition && (
-                        <Marker
-                            coordinate={playerPosition}
-                            title="Your Position"
-                            pinColor="blue"
-                            zIndex={500}
-                        >
-                            <View className="w-4 h-4 bg-blue-500 rounded-full border-2 border-white" />
-                        </Marker>
-                    )}
-
-                    {/* Target Position */}
-                    {targetPosition && (
-                        <Marker
-                            coordinate={targetPosition}
-                            title={`Target (${distance} meters)`}
-                            pinColor="red"
-                        >
-                            <View className="w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
-                        </Marker>
-                    )}
-
-                    {/* Distance Line */}
-                    {playerPosition && targetPosition && (
-                        <Polyline
-                            coordinates={[playerPosition, targetPosition]}
-                            strokeColor="#059669"
-                            strokeWidth={3}
-                            lineDashPattern={[5, 5]}
-                        />
-                    )}
-                </MapView>
-            </View>
-
-            {/* Bottom Panel */}
-            <View className="bg-white px-4 py-4 shadow-lg">
-                {/* Distance Display */}
-                {distance > 0 && (
-                    <View className="bg-green-50 rounded-xl p-4 mb-4">
-                        <View className="flex-row items-center justify-between">
-                            <View className="flex-1">
-                                <Text className="text-green-900 font-bold text-lg">
-                                    Distance: {distance} meters
-                                </Text>
-                                <Text className="text-green-700 text-sm mt-1">
-                                    Lie: {getActiveSurfaceCondition().replace('_', ' ')}
-                                    {getActiveAdditionalConditions().length > 0 && 
-                                        ` + ${getActiveAdditionalConditions().join(', ')}`
-                                    }
-                                </Text>
-                                {weather && (
-                                    <Text className="text-green-700 text-sm mt-1">
-                                        Wind: {weather.windSpeed}m/s {getWindDirection(weather.windDirection)}
-                                        {weather.windGusts > weather.windSpeed + 1 && 
-                                            ` (gusts ${weather.windGusts}m/s)`
-                                        }
-                                    </Text>
+                                {currentRound && (
+                                    <View className="bg-white/70 backdrop-blur-sm rounded-xl p-3 border border-gray-200 mt-2">
+                                        <View className="flex-row items-center space-x-6">
+                                            <View className="items-center">
+                                                <Text className="text-gray-700 font-semibold text-xs pr-2">
+                                                    HOLE
+                                                </Text>
+                                                <Text className="text-gray-900 font-bold text-2xl">
+                                                    {currentHole}
+                                                </Text>
+                                            </View>
+                                            
+                                            <View className="w-px h-10 bg-gray-300" />
+                                            
+                                            <View className="items-center">
+                                                <Text className="text-gray-700 font-semibold text-xs pl-2">
+                                                    PAR
+                                                </Text>
+                                                <Text className="text-gray-900 font-bold text-2xl">
+                                                    {getCurrentHolePar()}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
                                 )}
                             </View>
-                            <View className="flex-col space-y-2">
+                        )}
+                        
+                        {weatherLoading && (
+                            <ActivityIndicator size="small" color="#059669" />
+                        )}
+                    </View>
+                </View>
+
+                {/* Distance Display - Floating at bottom */}
+                {distance > 0 && (
+                    <View className="absolute bottom-16 left-4 right-4">
+                        <View className="bg-white/70 backdrop-blur-sm rounded-xl p-3 border border-gray-200">
+                            <View className="flex-row items-center justify-between gap-2">
                                 <TouchableOpacity
                                     onPress={() => setShowConditionsModal(true)}
-                                    className="bg-gray-100 rounded-xl px-3 py-2"
+                                    className="flex-1 bg-white/70 backdrop-blur-sm rounded-xl px-3 py-2 border border-gray-200"
                                 >
-                                    <Text className="text-green-900 font-semibold text-sm">Edit Conditions</Text>
+                                    <Text className="text-gray-900 font-semibold text-sm text-center">Edit Conditions</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     onPress={getClubRecommendation}
                                     disabled={recommendationLoading}
-                                    className="bg-green-600 rounded-xl px-4 py-2"
+                                    className="flex-1 bg-green-600/90 backdrop-blur-sm rounded-xl px-4 py-2"
                                 >
                                     {recommendationLoading ? (
                                         <ActivityIndicator size="small" color="white" />
                                     ) : (
-                                        <Text className="text-white font-bold">Get Club</Text>
+                                        <Text className="text-white font-bold text-center">Get Club</Text>
                                     )}
                                 </TouchableOpacity>
                             </View>
@@ -993,69 +968,59 @@ export default function SmartCaddie() {
                     </View>
                 )}
 
-                {/* Recommendation Display */}
+                {/* Recommendation Display - Floating */}
                 {recommendation && (
-                    <View className="bg-blue-50 rounded-xl p-4 mb-4">
-                        <Text className="text-blue-900 font-bold text-lg mb-2">
-                            AI Recommendation
-                        </Text>
-                        <Text className="text-blue-800">
-                            {recommendation.answer || 'Club recommendation received'}
-                        </Text>
+                    <View className="absolute bottom-40 left-4 right-4">
+                        <View className="bg-white/90 backdrop-blur-sm rounded-xl p-4 border border-gray-200">
+                            <Text className="text-gray-900 font-bold text-lg mb-2">
+                                Club Recommendation
+                            </Text>
+                            <Text className="text-gray-700">
+                                {recommendation.answer || 'Club recommendation received'}
+                            </Text>
+                        </View>
                     </View>
                 )}
 
-                {/* Action Buttons */}
-                <View className="flex-row space-x-2">
-                    <TouchableOpacity 
-                        onPress={getCurrentLocation}
-                        className="flex-1 bg-gray-100 rounded-xl p-3 flex-row items-center justify-center"
-                    >
-                        <Ionicons name="locate" size={20} color="#059669" />
-                        <Text className="text-green-900 font-semibold ml-2">Recenter</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        onPress={toggleMapType}
-                        className="flex-1 bg-gray-100 rounded-xl p-3 flex-row items-center justify-center"
-                    >
-                        <Ionicons 
-                            name={mapType === 'satellite' ? 'map' : 'earth'} 
-                            size={20} 
-                            color="#059669" 
-                        />
-                        <Text className="text-green-900 font-semibold ml-2">
-                            {mapType === 'satellite' ? 'Golf View' : 'Satellite'}
-                        </Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        onPress={() => {
-                            // If there's a recommendation, show feedback modal first
-                            if (recommendation) {
-                                setShowFeedbackModal(true)
-                            } else {
-                                // No recommendation to rate, just clear everything
-                                setTargetPosition(null)
-                                setDistance(0)
-                                setRecommendation(null)
-                                setShowConditionsModal(false)
-                                setConditionsModalShown(false)
-                                setShowFeedbackModal(false)
-                                setFeedbackData({
-                                    liked: null,
-                                    club_used: '',
-                                    shot_result: ''
-                                })
-                            }
-                        }}
-                        className="flex-1 bg-gray-100 rounded-xl p-3 flex-row items-center justify-center"
-                    >
-                        <Ionicons name="refresh" size={20} color="#059669" />
-                        <Text className="text-green-900 font-semibold ml-2">
-                            {recommendation ? 'Rate & Clear' : 'Clear'}
-                        </Text>
-                    </TouchableOpacity>
+                {/* Action Buttons - Floating at bottom */}
+                <View className="absolute bottom-2 left-4 right-4">
+                    <View className="flex-row gap-2">
+                        <TouchableOpacity 
+                            onPress={getCurrentLocation}
+                            className="flex-1 bg-white/70 backdrop-blur-sm rounded-xl p-2 flex-row items-center justify-center border border-gray-200"
+                        >
+                            <Ionicons name="locate" size={18} color="#059669" />
+                            <Text className="text-gray-900 font-semibold ml-2 text-sm">
+                                Recenter
+                            </Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity 
+                            onPress={() => {
+                                if (recommendation) {
+                                    setShowFeedbackModal(true)
+                                } else {
+                                    setTargetPosition(null)
+                                    setDistance(0)
+                                    setRecommendation(null)
+                                    setShowConditionsModal(false)
+                                    setConditionsModalShown(false)
+                                    setShowFeedbackModal(false)
+                                    setFeedbackData({
+                                        liked: null,
+                                        club_used: '',
+                                        shot_result: ''
+                                    })
+                                }
+                            }}
+                            className="flex-1 bg-white/70 backdrop-blur-sm rounded-xl p-2 flex-row items-center justify-center border border-gray-200"
+                        >
+                            <Ionicons name="refresh" size={18} color="#059669" />
+                            <Text className="text-gray-900 font-semibold ml-2 text-sm">
+                                {recommendation ? 'Rate & Clear' : 'Clear'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
 

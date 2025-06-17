@@ -333,13 +333,18 @@ const useRoundStore = create((set, get) => ({
   clearError: () => set({ error: null }),
 
   // Reset store
-  reset: () => set({
+  reset: () => {
+    set({
     currentRound: null,
     currentHole: 1,
-    roundHistory: [],
     loading: false,
-    error: null
-  }),
+      error: null,
+      selectedCourse: null,
+      selectedTee: null,
+      targetPosition: null,
+      distance: 0
+    })
+  },
 
   // Course-related actions
   searchCourses: async (searchTerm) => {

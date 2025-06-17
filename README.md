@@ -14,11 +14,12 @@ Get personalized club and shot recommendations based on:
 - **Interactive feedback system** - Rate recommendations to improve future suggestions
 
 ### 📍 Advanced GPS & Mapping
-- **Dual map views** - Toggle between satellite and golf-optimized views
+- **Map views** - Golf-optimized satellite map views
 - **Real-time location tracking** - High-accuracy GPS positioning
 - **Interactive target selection** - Tap map to measure distances
 - **Wind direction overlay** - Visual wind arrows with speed indicators
-- **Distance measurement** - Precise yardage calculations
+- **Distance measurement** - Precise meter/yard calculations
+- **Hole progression** - Easy navigation between holes
 
 ### 🏌️ Complete Round Management
 - **Round tracking** - Start and manage full golf rounds
@@ -27,18 +28,44 @@ Get personalized club and shot recommendations based on:
 - **Score analytics** - Real-time score relative to par
 - **Round completion** - Save rounds with optional notes
 - **Round history** - View past performance and trends
+- **Quick scoring** - Efficient shot counting interface
 
 ### 📊 Statistics & Analytics
 - **Performance tracking** - Monitor improvement over time
-- **9 vs 18-hole stats** - Toggle between different round formats
+- **Time-based filtering** - View stats by week, month, or year
 - **Score distribution** - Analyze your scoring patterns
 - **Course-specific data** - Track performance by course
+- **Visual trends** - Interactive charts and graphs
+- **Handicap tracking** - Automatic World Handicap System (WHS) calculations
+
+### ⛳ Handicap System
+- **WHS Compliance** - Follows official World Handicap System rules
+- **Automatic Calculation** - Updates handicap index after each qualifying round
+- **Score Differential** - Calculates using course rating and slope rating
+- **Rolling Average** - Uses best 8 of last 20 rounds
+- **Course Handicap** - Automatic adjustment based on:
+  - Course rating
+  - Slope rating
+  - Par differential
+  - Playing conditions
+- **Score Types**
+  - 18-hole rounds
+  - 9-hole rounds (combined for handicap calculation)
+  - Tournament rounds
+- **Handicap Controls**
+  - Soft and hard caps on handicap increases
+  - Exceptional score reductions
+  - Maximum hole scores for handicap purposes
+- **Visual Tracking**
+  - Handicap history chart
+  - Score differential trends
+  - Progress indicators
 
 ### 👤 User Profile Management
 - **Secure authentication** - Token-based login system
 - **Profile customization** - Manage personal golf information
-- **Club management** - Store and organize your golf clubs
 - **Password management** - Secure account controls
+- **Data persistence** - Reliable state management
 
 ### 🎯 Shot Feedback System
 - **Recommendation rating** - Thumbs up/down for AI suggestions
@@ -50,33 +77,28 @@ Get personalized club and shot recommendations based on:
 
 ### Frontend (React Native/Expo)
 - **Framework**: React Native with Expo
-- **Navigation**: Expo Router
+- **Navigation**: Expo Router (type-safe file-based routing)
 - **Styling**: NativeWind (Tailwind CSS)
 - **Maps**: React Native Maps
 - **Location**: Expo Location
 - **State Management**: Zustand stores
 - **Icons**: Expo Vector Icons (Ionicons)
+- **Charts**: Custom chart components
 
 ### Backend (FastAPI)
 - **Framework**: FastAPI (Python)
-- **Database**: PostgreSQL
-- **AI Integration**: LangSmith + custom agent system
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **AI Integration**: Custom recommendation engine
 - **Authentication**: JWT token-based system
 - **Weather API**: Open-Meteo integration
-- **Real-time data**: WebSocket support
-
-### Key Libraries & Services
-- **Mapping**: React Native Maps with satellite/standard views
-- **Weather**: Open-Meteo API for real-time conditions
-- **GPS**: High-accuracy location services
-- **AI**: Custom golf recommendation engine
-- **Analytics**: Performance tracking and statistics
+- **Database Migrations**: Alembic
 
 ## API Endpoints
 
 ### Core Features
 - `POST /v1/agent/query` - Get personalized caddie recommendations
 - `POST /shots/feedback` - Submit feedback on recommendations
+- `GET /weather` - Get current weather conditions
 
 ### User Management
 - `POST /auth/register` - Create new user account
@@ -87,19 +109,17 @@ Get personalized club and shot recommendations based on:
 ### Round Management
 - `POST /rounds/start` - Start a new golf round
 - `GET /rounds/active` - Get current active round
-- `PUT /rounds/{id}/complete` - Complete a round
+- `PUT /rounds/{id}/hole/{hole_number}` - Update hole score
+- `POST /rounds/{id}/complete` - Complete a round
 - `GET /rounds/history` - Get round history
-
-### Club Management
-- `GET /clubs` - Get user's clubs
-- `POST /clubs` - Add new club
-- `PUT /clubs/{id}` - Update club information
-- `DELETE /clubs/{id}` - Remove club
+- `GET /handicap/index` - Get current handicap index
+- `GET /handicap/history` - Get handicap history
+- `GET /handicap/course` - Calculate course handicap
 
 ## Setup & Installation
 
 ### Prerequisites
-- Node.js 18+ and npm/yarn
+- Node.js 18+ and npm
 - Python 3.8+
 - PostgreSQL 12+
 - Expo CLI (`npm install -g @expo/cli`)
@@ -130,14 +150,15 @@ Get personalized club and shot recommendations based on:
    # Edit .env with your database credentials and API keys
    ```
 
-5. **Run database migrations**
+5. **Initialize database**
    ```bash
-   # Add your migration commands here
+   python -m app.db_setup
+   python -m app.api.v1.core.dataset.import_courses
    ```
 
 6. **Start server**
    ```bash
-   uvicorn main:app --reload
+   uvicorn main:app --reload --host 0.0.0.0 --port 8000
    ```
 
 ### Frontend Setup
@@ -151,7 +172,7 @@ Get personalized club and shot recommendations based on:
    npm install
    ```
 
-3. **Configure API endpoint**
+3. **Configure environment**
    ```bash
    # Update config/api.js with your backend URL
    ```
@@ -165,4 +186,18 @@ Get personalized club and shot recommendations based on:
    - Install Expo Go app on your phone
    - Scan QR code from terminal
    - Or run on iOS/Android simulator
+
+## Development Notes
+
+### Key Features in Progress
+- Enhanced statistics visualization
+- Course management system
+- Advanced weather integration
+- Performance optimization
+
+### Best Practices
+- Keep virtual environment activated during backend development
+- Run backend server before starting frontend
+- Test on both iOS and Android for compatibility
+- Follow the established code structure and patterns
 

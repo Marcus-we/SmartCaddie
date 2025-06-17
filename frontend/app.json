@@ -1,33 +1,62 @@
 {
   "expo": {
-    "scheme": "SmartCaddie",
-    "name": "frontend",
-    "slug": "frontend",
+    "scheme": "smartcaddie",
+    "name": "SmartCaddie",
+    "slug": "smart-caddie",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow SmartCaddie to use your location to provide accurate distance measurements and course information.",
+          "locationWhenInUsePermission": "Allow SmartCaddie to use your location to provide accurate distance measurements and course information."
+        }
+      ],
+      "expo-secure-store",
+      "expo-sqlite"
+    ],
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.marcuswe.smartcaddie",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "SmartCaddie needs access to your location to provide accurate distance measurements and course information.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SmartCaddie needs access to your location to provide accurate distance measurements and course information.",
+        "UIBackgroundModes": [
+          "location"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.marcuswe.smartcaddie"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-router"
-    ]
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4a178224-5ca3-4865-b97b-a2bb9a8f0887"
+      }
+    },
+    "owner": "marcus-we"
   }
 }

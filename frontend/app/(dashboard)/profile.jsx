@@ -120,7 +120,7 @@ export default function Profile() {
                                     <Text className="text-3xl font-bold text-green-700">
                                         {formatHandicapIndex(userData.handicap_index)}
                                     </Text>
-                                    <Text className="text-gray-600 text-sm">Handicap</Text>
+                                    <Text className="text-gray-600 text-sm">Unofficial Handicap</Text>
                                     {userData?.last_handicap_update && (
                                         <Text className="text-gray-500 text-xs mt-1">
                                             Last updated: {new Date(userData.last_handicap_update).toLocaleDateString()}

@@ -318,7 +318,7 @@ export default function Stats() {
     const filteredRecentRounds = getFilteredRecentRounds()
 
     const StatCard = ({ title, value, subtitle, icon, color = "green" }) => (
-        <View className="bg-white rounded-2xl p-4 shadow-sm flex-1 mx-1">
+        <View className="bg-white rounded-2xl p-4 flex-1 mx-1">
             <View className="flex-row items-center justify-between mb-2">
                 <View className={`w-10 h-10 bg-${color}-100 rounded-full items-center justify-center`}>
                     <Ionicons name={icon} size={20} color={color === "green" ? "#059669" : "#DC2626"} />
@@ -389,7 +389,7 @@ export default function Stats() {
                         Your Golf Stats {selectedPeriod !== 'all' ? `(${selectedPeriod.charAt(0).toUpperCase() + selectedPeriod.slice(1)})` : ''}
                     </Text>
                     <View className="grid grid-cols-3 gap-4">
-                        <View className="bg-white rounded-2xl p-4 shadow-sm items-center">
+                        <View className="bg-white rounded-2xl p-4 items-center">
                             <Text className="text-2xl font-bold text-green-600">
                                 {stats.roundsPlayed}
                             </Text>
@@ -398,7 +398,7 @@ export default function Stats() {
                             </Text>
                         </View>
                         
-                        <View className="bg-white rounded-2xl p-4 shadow-sm items-center">
+                        <View className="bg-white rounded-2xl p-4 items-center">
                             <Text className="text-2xl font-bold text-blue-600">
                                 {stats.averageEfficiency}%
                             </Text>
@@ -407,7 +407,7 @@ export default function Stats() {
                             </Text>
                         </View>
                         
-                        <View className="bg-white rounded-2xl p-4 shadow-sm items-center">
+                        <View className="bg-white rounded-2xl p-4 items-center">
                             <Text className="text-2xl font-bold text-orange-600">
                                 {stats.bestScore !== null ? getScoreText(stats.bestScore) : '-'}
                             </Text>
@@ -448,7 +448,7 @@ export default function Stats() {
                                 // subtitle="Best score relative to par"
                                 icon="trophy"
                             />
-                            <View className="bg-white rounded-2xl p-4 shadow-sm flex-1 mx-1">
+                            <View className="bg-white rounded-2xl p-4 flex-1 mx-1">
                                 <View className="flex-row items-center justify-between mb-2">
                                     <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center">
                                         <Ionicons name="golf" size={20} color="#3B82F6" />
@@ -479,7 +479,7 @@ export default function Stats() {
                     <View className="gap-3">
                         {/* Handicap Section */}
                         {userData?.handicap_index !== null && (
-                            <View className="bg-white rounded-2xl p-4 shadow-sm">
+                            <View className="bg-white rounded-2xl p-4 ">
                                 <View className="flex-row items-center justify-between">
                                     <View className="flex-row items-center">
                                         <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3">
@@ -507,7 +507,7 @@ export default function Stats() {
                         )}
                         
                         {/* Existing Total Shots Section */}
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <View className="flex-row items-center justify-between">
                                 <View className="flex-row items-center">
                                     <View className="w-10 h-10 bg-green-100 rounded-full items-center justify-center mr-3">
@@ -529,7 +529,7 @@ export default function Stats() {
                         </View>
 
                         {/* Total Par */}
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <View className="flex-row items-center justify-between">
                                 <View className="flex-row items-center">
                                     <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center mr-3">
@@ -551,7 +551,7 @@ export default function Stats() {
                         </View>
 
                         {/* Efficiency Rating */}
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <View className="flex-row items-center justify-between mb-3">
                                 <View className="flex-row items-center">
                                     <View className="w-10 h-10 bg-orange-100 rounded-full items-center justify-center mr-3">
@@ -590,7 +590,7 @@ export default function Stats() {
                         Score Over Time
                     </Text>
                     {chartData ? (
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <SimpleLineChart
                                 data={chartData.datasets[0].data}
                                 labels={chartData.labels}
@@ -603,7 +603,7 @@ export default function Stats() {
                             </Text>
                         </View>
                     ) : (
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <View className="items-center py-8">
                                 <Ionicons name="analytics-outline" size={48} color="#9CA3AF" />
                                 <Text className="text-gray-500 mt-2 text-center">
@@ -624,7 +624,7 @@ export default function Stats() {
                     </Text>
                     
                     {filteredRecentRounds.length === 0 ? (
-                        <View className="bg-white rounded-2xl p-4 shadow-sm">
+                        <View className="bg-white rounded-2xl p-4 ">
                             <View className="items-center py-8">
                                 <Ionicons name="golf-outline" size={48} color="#9CA3AF" />
                                 <Text className="text-gray-500 mt-2 text-center">
@@ -638,7 +638,7 @@ export default function Stats() {
                     ) : (
                         <View className="gap-3">
                             {filteredRecentRounds.map((round) => (
-                                <View key={round.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                                <View key={round.id} className="bg-white rounded-2xl p-4 ">
                                     <View className="flex-row items-center justify-between">
                                         <View className="flex-1">
                                             <Text className="text-lg font-semibold text-gray-900">

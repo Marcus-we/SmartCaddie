@@ -120,12 +120,12 @@ def llm_filter_shots(request: AgentQueryRequest, retrieved_shots: list, target_c
     ground_conditions_text = ", ".join(ground_conditions) if ground_conditions else "normal"
     
     current_conditions = f"""
-Distance to flag: {request.distance_to_flag} meters
-Wind speed: {request.wind_speed} m/s
-Wind direction: {request.wind_direction}
-Lie conditions: {', '.join(lie_conditions)}
-Ground conditions: {ground_conditions_text}
-"""
+        Distance to flag: {request.distance_to_flag} meters
+        Wind speed: {request.wind_speed} m/s
+        Wind direction: {request.wind_direction}
+        Lie conditions: {', '.join(lie_conditions)}
+        Ground conditions: {ground_conditions_text}
+    """
     
     # Format retrieved shots
     formatted_shots = []
