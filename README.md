@@ -47,19 +47,12 @@ Get personalized club and shot recommendations based on:
   - Course rating
   - Slope rating
   - Par differential
-  - Playing conditions
 - **Score Types**
   - 18-hole rounds
   - 9-hole rounds (combined for handicap calculation)
-  - Tournament rounds
 - **Handicap Controls**
   - Soft and hard caps on handicap increases
   - Exceptional score reductions
-  - Maximum hole scores for handicap purposes
-- **Visual Tracking**
-  - Handicap history chart
-  - Score differential trends
-  - Progress indicators
 
 ### 👤 User Profile Management
 - **Secure authentication** - Token-based login system
