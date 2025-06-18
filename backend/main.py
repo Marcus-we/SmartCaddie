@@ -19,15 +19,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(router, prefix="/v1", tags=["v1"])
 
 origins = [
-    "http://localhost:3000",  # React app URL
-    "http://localhost:8000",  # FastAPI app URL
-    "http://localhost:5173",  # Another development URL
-    "http://192.168.0.129:8000",  # Local network access
-    "http://192.168.0.129:8081",  # Expo dev server
-    "http://192.168.0.129:19000",  # Expo dev server alternative
-    "http://192.168.0.129:19001",  # Expo dev server alternative
-    "http://192.168.0.129:19002",  # Expo dev server alternative
-    "*",  # Allow all origins for development (remove in production)
+    "null",
 ]
 
 app.add_middleware(
